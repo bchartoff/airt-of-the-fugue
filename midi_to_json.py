@@ -103,6 +103,13 @@ SUBJECT_TONAL_INV_B_ANS  = [-5, 2, 1, 2, 2, 1, -1, -2]   # tonal inv. answer (C 
 # Upper voice opens: [-7,-1,1,2,-2,2,1,...] — this is the inversion presented as the primary voice
 # We treat these the same as subject_inv entries.
 
+# ── Secondary subject: Contrapunctus IX descending-scale subject ──
+# Octave leap up, then stepwise descent over an octave, into the standard tail.
+# D→D(8va)→C#→B→A→G→F→E→D  (9 notes, 8 intervals)
+# This is a DIFFERENT subject from the main AotF theme and gets its own motif label.
+SUBJECT2_C9         = [12, -1, -2, -2, -2, -2, -1, -2]   # subject on D (C IX Alto m1)
+SUBJECT2_C9_ANSWER  = [12, -1, -1, -2, -2, -2, -1, -2]   # answer on A (tonal adj.)
+
 # ALL patterns with their note-count (8 or 9), motif label
 # Format: (intervals_list, notes_in_window, motif_label, description)
 SUBJECT_PATTERNS = [
@@ -118,6 +125,8 @@ SUBJECT_PATTERNS = [
     (SUBJECT_INV_B_ANS,              9, 'subject_inv', 'real inv. Form B (answer)'),
     (SUBJECT_TONAL_INV_B_SUBJ,       9, 'subject_inv', 'tonal inv. Form B (rectus)'),
     (SUBJECT_TONAL_INV_B_ANS,        9, 'subject_inv', 'tonal inv. Form B (answer)'),
+    (SUBJECT2_C9,               9, 'subject2',    'C IX descending-scale subject (D)'),
+    (SUBJECT2_C9_ANSWER,        9, 'subject2',    'C IX descending-scale answer (A)'),
 ]
 
 # Tail = last 5 notes of Form A subject: D C# D E F → [-1,+1,+2,+1]
@@ -151,7 +160,7 @@ def flexible_match(voice_notes, start_idx, pattern, max_skips=4, min_dur=0.4):
     Walks forward from start_idx, matching each expected interval in *pattern*.
     If the next note doesn't produce the expected interval **and** it is short
     (duration < *min_dur*), skip it (treat as grace note) and try the note after.
-    At most *max_skips* notes may be skipped in one subject entry.
+    Multiple consecutive grace notes may be skipped (up to *max_skips* total).
 
     Returns ``(matched_indices, skipped_indices)`` on success, or ``None``.
     *matched_indices* contains the indices of the structural (subject-position)
@@ -172,19 +181,22 @@ def flexible_match(voice_notes, start_idx, pattern, max_skips=4, min_dur=0.4):
 
         if actual == pattern[p]:
             matched.append(j)
-        elif voice_notes[j]['duration'] < min_dur and len(skipped) < max_skips:
-            # Candidate grace note — skip it and try the next note
-            skipped.append(j)
-            j += 1
-            if j >= count:
-                return None
-            actual = voice_notes[j]['pitch'] - voice_notes[matched[-1]]['pitch']
-            if actual == pattern[p]:
-                matched.append(j)
-            else:
-                return None
         else:
-            return None
+            # Try skipping one or more consecutive short notes (grace notes)
+            found = False
+            while (voice_notes[j]['duration'] < min_dur
+                   and len(skipped) < max_skips):
+                skipped.append(j)
+                j += 1
+                if j >= count:
+                    return None
+                actual = voice_notes[j]['pitch'] - voice_notes[matched[-1]]['pitch']
+                if actual == pattern[p]:
+                    matched.append(j)
+                    found = True
+                    break
+            if not found:
+                return None
 
     return matched, skipped
 

@@ -21,6 +21,20 @@ const SUBJECT_COLORS = [
   '#800026', // pos 7
 ];
 
+// Cool palette for the secondary subject (C IX descending-scale theme).
+// RColorBrewer "YlGnBu" 9-class: light yellow-green → deep blue.
+const SUBJECT2_COLORS = [
+  '#ffffd9', // pos 0
+  '#edf8b1', // pos 1
+  '#c7e9b4', // pos 2
+  '#7fcdbb', // pos 3
+  '#41b6c4', // pos 4
+  '#1d91c0', // pos 5
+  '#225ea8', // pos 6
+  '#253494', // pos 7
+  '#081d58', // pos 8 (9-note subject has 9 positions)
+];
+
 const FUZZY_COLOR = '#999999'; // grey for untagged / fuzzy-only notes
 
 // Parse a hex color to [r,g,b] 0-255
@@ -207,6 +221,9 @@ function noteRectInLane(note, lane) {
 function getMotifColor(note) {
   if (!note.motif) return null;
   const pos = note.motif_pos >= 0 ? note.motif_pos : (note.best_pos ?? 0);
+  if (note.motif === 'subject2') {
+    return SUBJECT2_COLORS[Math.min(pos, 8)];
+  }
   return SUBJECT_COLORS[Math.min(pos, 7)];
 }
 
@@ -363,6 +380,8 @@ function getNoteMotifLabel(note) {
     return { prefix: '↗', label: `head  ${pos + 1}/5` };
   } else if (m === 'head_inv') {
     return { prefix: '↙', label: `inv. head  ${pos + 1}/5` };
+  } else if (m === 'subject2') {
+    return { prefix: '♦', label: `2nd subject  ${pos + 1}/9` };
   } else {
     return { prefix: '≈', label: `pos ${pos + 1}/8  ${pct}%` };
   }
@@ -469,12 +488,13 @@ function drawSubjectMarkers(lane, scrollX) {
   const size = Math.max(6, Math.min(10, h * 0.12));
 
   for (const n of notes) {
-    if ((n.motif !== 'subject' && n.motif !== 'subject_inv') || n.motif_pos !== 0) continue;
+    if ((n.motif !== 'subject' && n.motif !== 'subject_inv' && n.motif !== 'subject2') || n.motif_pos !== 0) continue;
     const x = n.start * pxPerSec;
     if (x < scrollX - size || x > scrollX + w + size) continue;
 
-    // Fixed deep red marker — clearly visible against the YlOrRd palette
-    const color = n.motif === 'subject_inv' ? '#444488' : '#800026';
+    // Marker color: warm for main subject, cool for secondary
+    const color = n.motif === 'subject2' ? '#081d58'
+               : n.motif === 'subject_inv' ? '#444488' : '#800026';
 
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
@@ -758,6 +778,7 @@ const MOTIF_NAMES = {
   tail_inv:    { icon: '↕', label: 'Inverted tail fragment',      desc: 'Tail played upside-down (intervals: +1,−1,−2,−1). Classic stretto and augmentation device.' },
   head:        { icon: '↗', label: 'Head fragment',               desc: 'First 5 notes of subject (+7,−4,−3,−1) or answer (+5,−2,−3,−1). Transposition-invariant.' },
   head_inv:    { icon: '↙', label: 'Inverted head fragment',      desc: 'Head played upside-down (−7,+4,+3,+1 or −5,+2,+3,+1). Transposition-invariant.' },
+  subject2:    { icon: '♦', label: 'Secondary subject (C IX)',    desc: 'Descending-scale countersubject: octave leap up, then stepwise descent over an octave. Unique to Contrapunctus IX.' },
   '':          { icon: '≈', label: 'Fuzzy match only',            desc: 'Not part of any recognized motif. Color and opacity driven purely by similarity score from local interval context.' },
 };
 
