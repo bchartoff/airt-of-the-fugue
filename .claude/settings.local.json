@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version:*)",
+      "Bash(python3:*)",
+      "Bash(brew list:*)",
+      "Bash(pip3 list:*)",
+      "Bash(pip3 install:*)",
+      "Bash(open http://localhost:8000)",
+      "WebFetch(domain:jeffreychall.com)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:www.ethanhein.com)",
+      "WebFetch(domain:calperformances.org)",
+      "WebFetch(domain:www.teoria.com)",
+      "WebFetch(domain:www.classicalnotes.net)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(node -c:*)",
+      "Bash(/usr/local/bin/node:*)",
+      "Bash(/opt/homebrew/bin/node:*)",
+      "Bash(xargs kill:*)",
+      "WebFetch(domain:www.jsbach.net)",
+      "WebFetch(domain:www.mutopiaproject.org)",
+      "Bash(ls:*)"
+    ]
+  }
+}

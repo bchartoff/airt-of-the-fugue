@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIrt of the Fugue</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="lanes"></div>
+
+  <div id="progress-bar-container">
+    <div id="progress-bar-fill"></div>
+  </div>
+
+  <div id="controls">
+    <button id="btn-play">&#9654;</button>
+    <button id="btn-stop">&#9632;</button>
+    <span id="time-display">0:00 / 0:00</span>
+    <div id="piece-tabs"></div>
+    <button id="btn-info" title="Show detailed color reasoning for current notes">Info</button>
+    <label class="zoom-label">
+      Zoom
+      <input type="range" id="zoom" min="4" max="40" value="24" step="1">
+    </label>
+  </div>
+
+  <div id="tooltip" hidden></div>
+
+  <!-- Info panel -->
+  <div id="info-overlay" hidden>
+    <div id="info-panel">
+      <div id="info-header">
+        <span id="info-title">Color Reasoning</span>
+        <button id="info-close">&#10005;</button>
+      </div>
+      <div id="info-body"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tone@15/build/Tone.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
