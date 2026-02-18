@@ -103,12 +103,15 @@ SUBJECT_TONAL_INV_B_ANS  = [-5, 2, 1, 2, 2, 1, -1, -2]   # tonal inv. answer (C 
 # Upper voice opens: [-7,-1,1,2,-2,2,1,...] — this is the inversion presented as the primary voice
 # We treat these the same as subject_inv entries.
 
-# ── Secondary subject: Contrapunctus IX descending-scale subject ──
-# Octave leap up, then stepwise descent over an octave, into the standard tail.
-# D→D(8va)→C#→B→A→G→F→E→D  (9 notes, 8 intervals)
-# This is a DIFFERENT subject from the main AotF theme and gets its own motif label.
-SUBJECT2_C9         = [12, -1, -2, -2, -2, -2, -1, -2]   # subject on D (C IX Alto m1)
-SUBJECT2_C9_ANSWER  = [12, -1, -1, -2, -2, -2, -1, -2]   # answer on A (tonal adj.)
+# ── Contrapunctus IX: main subject with scalar elaboration ──
+# The descending scale D→D(8va)→C#→B→A→G→F→E→D fills in the subject's
+# opening leap with stepwise passing tones, then converges on the standard
+# tail (D→C#→D→E→F).  The structural endpoints map to main-subject positions:
+#   pos 0: D, pos 1: D(8va) (octave variant of the fifth), scale fills to
+#   pos 3: D, then 4: C#, 5: D, 6: E, 7: F — identical to main subject tail.
+# These are tagged as 'subject' (not a separate theme) with the warm palette.
+SUBJECT_C9_SCALE         = [12, -1, -2, -2, -2, -2, -1, -2]   # subject on D (C IX Alto m1)
+SUBJECT_C9_SCALE_ANSWER  = [12, -1, -1, -2, -2, -2, -1, -2]   # answer on A (tonal adj.)
 
 # ALL patterns with their note-count (8 or 9), motif label
 # Format: (intervals_list, notes_in_window, motif_label, description)
@@ -125,8 +128,8 @@ SUBJECT_PATTERNS = [
     (SUBJECT_INV_B_ANS,              9, 'subject_inv', 'real inv. Form B (answer)'),
     (SUBJECT_TONAL_INV_B_SUBJ,       9, 'subject_inv', 'tonal inv. Form B (rectus)'),
     (SUBJECT_TONAL_INV_B_ANS,        9, 'subject_inv', 'tonal inv. Form B (answer)'),
-    (SUBJECT2_C9,               9, 'subject2',    'C IX descending-scale subject (D)'),
-    (SUBJECT2_C9_ANSWER,        9, 'subject2',    'C IX descending-scale answer (A)'),
+    (SUBJECT_C9_SCALE,          9, 'subject',     'C IX scalar elaboration of subject (D)'),
+    (SUBJECT_C9_SCALE_ANSWER,   9, 'subject',     'C IX scalar elaboration of answer (A)'),
 ]
 
 # Tail = last 5 notes of Form A subject: D C# D E F → [-1,+1,+2,+1]
