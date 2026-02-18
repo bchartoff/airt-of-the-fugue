@@ -240,32 +240,15 @@ function getNoteColor(note, voiceNotes, noteIdx) {
   const own = getMotifColor(note);
   if (own) return own;
 
-  // Untagged note — look for nearest tagged neighbors before and after in this voice
-  if (!voiceNotes) return FUZZY_COLOR;
-
-  let prevColor = null, nextColor = null;
-  let prevDist = Infinity, nextDist = Infinity;
-
-  for (let i = noteIdx - 1; i >= 0; i--) {
-    const c = getMotifColor(voiceNotes[i]);
-    if (c) { prevColor = c; prevDist = noteIdx - i; break; }
-  }
-  for (let i = noteIdx + 1; i < voiceNotes.length; i++) {
-    const c = getMotifColor(voiceNotes[i]);
-    if (c) { nextColor = c; nextDist = i - noteIdx; break; }
-  }
-
-  // Both neighbors within 3 notes → tween between them
-  if (prevColor && nextColor && prevDist <= 3 && nextDist <= 3) {
-    const t = prevDist / (prevDist + nextDist);
-    return lerpColor(prevColor, nextColor, t);
-  }
-  // Only one neighbor within 2 notes → use its color at reduced saturation
-  if (prevColor && prevDist <= 2) return lerpColor(prevColor, FUZZY_COLOR, 0.4);
-  if (nextColor && nextDist <= 2) return lerpColor(nextColor, FUZZY_COLOR, 0.4);
-
-  // Truly isolated → grey
-  return FUZZY_COLOR;
+  // Untagged note — color by fuzzy similarity score.
+  // Every note has best_pos (0–7, which subject position it resembles)
+  // and similarity (0.0–1.0, how confident the match is).
+  // Blend the palette color for best_pos with grey based on similarity.
+  const sim = note.similarity != null ? note.similarity : 0;
+  const pos = note.best_pos != null ? note.best_pos : 0;
+  const paletteColor = SUBJECT_COLORS[Math.min(pos, 7)];
+  // similarity drives how much palette color shows through vs grey
+  return lerpColor(FUZZY_COLOR, paletteColor, sim);
 }
 
 function drawFrame(t) {
@@ -318,7 +301,9 @@ function drawLane(lane, t, scrollX) {
     if (r.x + r.w < scrollX || r.x > scrollX + w) continue;
 
     const color = noteColors[i];
-    const alpha = isFuzzy[i] ? 0.22 : 0.85;
+    // Tagged notes: bold. Untagged: alpha scales with similarity (0.22 → 0.65).
+    const sim = n.similarity != null ? n.similarity : 0;
+    const alpha = isFuzzy[i] ? (0.22 + 0.43 * sim) : 0.85;
     ctx.fillStyle = hexToRgba(color, alpha);
     ctx.fillRect(r.x, r.y, r.w, r.h);
   }
