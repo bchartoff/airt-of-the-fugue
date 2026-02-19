@@ -26,6 +26,20 @@ VOICES_2 = [
     (1, 0, 0, 'Upper',   '#E85D4A'),
     (2, 1, 1, 'Lower',   '#4A90D9'),
 ]
+VOICES_12 = [
+    (1,  0,  0,  'Lead',       '#E85D4A'),
+    (2,  1,  1,  'Pad',        '#4A90D9'),
+    (3,  2,  2,  'Arp',        '#27AE60'),
+    (4,  3,  3,  'Sub Bass',   '#8E44AD'),
+    (5,  4,  4,  'Pluck',      '#E8A04A'),
+    (6,  5,  5,  'Stab',       '#D94A7B'),
+    (7,  6,  6,  'Hi-Hat',     '#7F8C8D'),
+    (8,  7,  7,  'Kick',       '#2C3E50'),
+    (9,  8,  8,  'Clap',       '#C0392B'),
+    (10, 9,  9,  'FX Rise',    '#1ABC9C'),
+    (11, 10, 10, 'Acid',       '#F39C12'),
+    (12, 11, 11, 'Supersaw',   '#9B59B6'),
+]
 
 # ── Piece definitions ──
 PIECES = {
@@ -42,7 +56,7 @@ PIECES = {
     11: {'midi': 'kunst_der_fuge_xi_mutopia.mid',       'output': 'notes_11.json',  'title': 'Contrapunctus XI',   'number': 'XI',   'voices': VOICES_4},
     12: {'midi': 'kunst_der_fuge_xii_mutopia.mid',      'output': 'notes_12.json',  'title': 'Contrapunctus XII',  'number': 'XII',  'voices': VOICES_2},
     13: {'midi': 'kunst_der_fuge_xiv_mutopia.mid',      'output': 'notes_14.json',  'title': 'Contrapunctus XIV',  'number': 'XIV',  'voices': VOICES_2},
-    14: {'midi': 'contrapunctus_xv.mid',                'output': 'notes_15.json',  'title': 'Contrapunctus XV',   'number': 'XV*',  'voices': VOICES_4},
+    14: {'midi': 'contrapunctus_xv.mid',                'output': 'notes_15.json',  'title': 'Contrapunctus XV',   'number': 'XV*',  'voices': VOICES_12},
 }
 
 # ── Subject interval patterns ──
