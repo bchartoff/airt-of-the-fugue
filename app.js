@@ -41,7 +41,7 @@ function lerpColor(hexA, hexB, t) {
   return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
 
-// Organ-style synth config:
+// Organ-style synth config (used for classical Bach pieces):
 // - sawtooth4 = sawtooth wave with 4 harmonics (warm, principal-pipe character)
 // - flat envelope: instant on, full sustain, fast release (no piano decay)
 const SYNTH_CONFIG = {
@@ -49,15 +49,56 @@ const SYNTH_CONFIG = {
   envelope: { attack: 0.01, decay: 0.0, sustain: 1.0, release: 0.08 },
 };
 
+// ── Per-voice EDM synth configs ──
+// Each EDM voice gets a distinct oscillator, envelope, and volume to avoid
+// frequency overlap and clipping when 12 voices play simultaneously.
+const EDM_VOICE_CONFIGS = {
+  'Lead':     { config: { oscillator: { type: 'sawtooth4' },   envelope: { attack: 0.01, decay: 0.1,  sustain: 0.8,  release: 0.15 } }, volume: -10, bus: 'wet' },
+  'Pad':      { config: { oscillator: { type: 'triangle4' },   envelope: { attack: 0.4,  decay: 0.3,  sustain: 0.7,  release: 0.6  } }, volume: -16, bus: 'wet' },
+  'Arp':      { config: { oscillator: { type: 'square8' },     envelope: { attack: 0.005,decay: 0.08, sustain: 0.3,  release: 0.05 } }, volume: -18, bus: 'wet' },
+  'Sub Bass': { config: { oscillator: { type: 'sine' },        envelope: { attack: 0.01, decay: 0.05, sustain: 1.0,  release: 0.08 } }, volume: -10, bus: 'dry' },
+  'Pluck':    { config: { oscillator: { type: 'triangle8' },   envelope: { attack: 0.002,decay: 0.15, sustain: 0.0,  release: 0.1  } }, volume: -14, bus: 'wet' },
+  'Stab':     { config: { oscillator: { type: 'sawtooth4' },   envelope: { attack: 0.005,decay: 0.12, sustain: 0.1,  release: 0.05 } }, volume: -16, bus: 'wet' },
+  'Hi-Hat':   { config: { oscillator: { type: 'square16' },    envelope: { attack: 0.001,decay: 0.04, sustain: 0.0,  release: 0.02 } }, volume: -22, bus: 'dry' },
+  'Kick':     { config: { oscillator: { type: 'sine' },        envelope: { attack: 0.001,decay: 0.18, sustain: 0.0,  release: 0.05 } }, volume: -8,  bus: 'dry' },
+  'Clap':     { config: { oscillator: { type: 'square16' },    envelope: { attack: 0.001,decay: 0.08, sustain: 0.0,  release: 0.03 } }, volume: -18, bus: 'dry' },
+  'FX Rise':  { config: { oscillator: { type: 'sawtooth8' },   envelope: { attack: 0.3,  decay: 0.1,  sustain: 0.6,  release: 0.3  } }, volume: -20, bus: 'wet' },
+  'Acid':     { config: { oscillator: { type: 'sawtooth' },    envelope: { attack: 0.005,decay: 0.1,  sustain: 0.4,  release: 0.08 } }, volume: -14, bus: 'wet' },
+  'Supersaw': { config: { oscillator: { type: 'sawtooth8' },   envelope: { attack: 0.01, decay: 0.15, sustain: 0.9,  release: 0.2  } }, volume: -12, bus: 'wet' },
+};
+
+// ── Master limiter (prevents clipping) ──
+let masterLimiter = null;
+
+function getMasterLimiter() {
+  if (!masterLimiter) {
+    masterLimiter = new Tone.Limiter(-3);
+    masterLimiter.toDestination();
+  }
+  return masterLimiter;
+}
+
 // Shared FX chain (created once, reused across piece loads)
 let organReverb = null;
 let organFilter = null;
 let organChorus = null;
 
+// Dry bus for percussion — bypasses reverb/chorus, goes through limiter only
+let dryBus = null;
+
+function getDryBus() {
+  if (!dryBus) {
+    dryBus = new Tone.Gain(1.0);
+    dryBus.connect(getMasterLimiter());
+  }
+  return dryBus;
+}
+
 function getOrganFX() {
+  const limiter = getMasterLimiter();
   if (!organReverb) {
     organReverb = new Tone.Reverb({ decay: 4.5, preDelay: 0.04, wet: 0.38 });
-    organReverb.toDestination();
+    organReverb.connect(limiter);
   }
   if (!organFilter) {
     // Low-pass at 2200Hz rolls off high harmonics — mimics pipe resonance
@@ -569,15 +610,35 @@ function updateActiveNotes(t) {
 // TONE.JS AUDIO
 // ─────────────────────────────────────────────
 function createSynths() {
-  const fx = getOrganFX();
-  // Slight volume shaping by register (bass a touch louder, soprano softer)
-  const voiceVolumes = [-10, -11, -11, -9]; // soprano, alto, tenor, bass
-  synths = data.voices.map((v, i) => {
-    const s = new Tone.PolySynth(Tone.Synth, SYNTH_CONFIG);
-    s.volume.value = voiceVolumes[i] !== undefined ? voiceVolumes[i] : -10;
-    s.connect(fx);
-    return s;
-  });
+  const isEDM = data.voices.length > 4;
+
+  if (isEDM) {
+    // ── EDM mode: per-voice synth configs with separate wet/dry buses ──
+    const wetBus = getOrganFX();
+    const dry = getDryBus();
+
+    synths = data.voices.map((v) => {
+      const vc = EDM_VOICE_CONFIGS[v.name];
+      const cfg = vc ? vc.config : SYNTH_CONFIG;
+      const vol = vc ? vc.volume : -14;
+      const bus = vc && vc.bus === 'dry' ? dry : wetBus;
+
+      const s = new Tone.PolySynth(Tone.Synth, cfg);
+      s.volume.value = vol;
+      s.connect(bus);
+      return s;
+    });
+  } else {
+    // ── Classical mode: uniform organ synth for all voices ──
+    const fx = getOrganFX();
+    const voiceVolumes = [-10, -11, -11, -9]; // soprano, alto, tenor, bass
+    synths = data.voices.map((v, i) => {
+      const s = new Tone.PolySynth(Tone.Synth, SYNTH_CONFIG);
+      s.volume.value = voiceVolumes[i] !== undefined ? voiceVolumes[i] : -10;
+      s.connect(fx);
+      return s;
+    });
+  }
 }
 
 function scheduleAllNotes(fromTime = 0) {

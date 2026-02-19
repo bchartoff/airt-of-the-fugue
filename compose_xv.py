@@ -1,35 +1,37 @@
 #!/usr/bin/env python3
-"""Compose Contrapunctus XV — EDM fugue with 12 voices.
+"""Compose Contrapunctus XV — progressive layered electronic fugue.
 
-Bach's Art of the Fugue subject gets the full electronic treatment:
-  Lead:     main melody, subject statements with filter-sweep feel
-  Pad:      sustained chords, slow attacks
-  Arp:      sixteenth-note arpeggiated patterns
-  Sub Bass: 808-style sub bass, octave drops
-  Pluck:    staccato plucked subject fragments
-  Stab:     chord stabs on off-beats
-  Hi-Hat:   rhythmic patterns on high pitches (pitched percussion)
-  Kick:     four-on-the-floor low bass drum pattern
-  Clap:     snare/clap hits
-  FX Rise:  risers and sweeps before drops
-  Acid:     303-style acid line, slides and resonance
-  Supersaw: thick unison lead for hooks
+Bach's Art of the Fugue subject, gradually layered across 12 voices.
+Not EDM — no drops. Think Nils Frahm meets Bach: slow build, melodic
+variations accumulate, voices enter one at a time, then thin back out.
 
-Structure (128 bars at ~130 BPM):
-  m1-8:    Intro — kick + hi-hat + sub bass build
-  m9-24:   Build 1 — subject enters in Lead, Arp joins
-  m25-32:  DROP 1 — full blast, all voices
-  m33-48:  Breakdown — stripped back, subject in Pad + Acid
-  m49-56:  Build 2 — rising FX, stretto entries
-  m57-72:  DROP 2 — maximum energy, supersaw + subject stretto
-  m73-80:  Breakdown 2 — half-time feel
-  m81-96:  DROP 3 / FINALE — augmented subject in Sub Bass, everything layered
-  m97-104: Outro — gradual strip-down
+Voices:
+  Lead:     main melody, subject statements
+  Pad:      sustained chords, slow evolving
+  Arp:      arpeggiated chord tones, sixteenths/thirty-seconds
+  Sub Bass: root pedals, low sine wave
+  Pluck:    staccato rapid-fire subject fragments (the star)
+  Stab:     sparse off-beat chord accents
+  Hi-Hat:   minimal rhythmic texture
+  Kick:     gentle pulse, enters late
+  Clap:     sparse accents
+  FX Rise:  textural sweeps
+  Acid:     subject in all four forms, staccato cycling
+  Supersaw: thick sustained subject for climax
+
+Structure (80 bars at ~110 BPM):
+  m1-8:    A — Solo: Pad + Lead alone
+  m9-16:   B — Echo: Lead repeats, Pluck enters with staccato subject
+  m17-28:  C — Conversation: Acid joins, call & response with Pluck
+  m29-44:  D — Accumulation: all melodic voices, rapid pluck fragments
+  m45-60:  E — Density: stretto, maximum melodic layering
+  m61-72:  F — Thinning: voices drop out, fading
+  m73-80:  G — Coda: Pad + Lead, dissolves
 """
 
 import mido
 
-# ── Tick constants (130 BPM → tempo=461538) ──
+# ── Tick constants (110 BPM → tempo=545454) ──
 T = 384
 WHOLE    = T * 4
 DOTTED_H = T * 3
@@ -40,7 +42,7 @@ EIGHTH   = T // 2
 SIXTEENTH = T // 4
 THIRTYSECOND = T // 8
 MEASURE  = T * 4
-TEMPO    = 461538  # ~130 BPM
+TEMPO    = 545454  # ~110 BPM
 
 # Subject intervals
 SUBJ = [7, -4, -3, -1, 1, 2, 1]
@@ -57,47 +59,65 @@ CHORDS = {
 }
 
 # ── Harmonic plan (per half-bar, 2 beats each) ──
-# Dm-centered EDM progression with some borrowed chords
-H_INTRO = [(2,'m')] * 8 + [(7,'m')] * 4 + [(9,'7')] * 4  # 8 bars
-H_BUILD1 = [
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (0,'7'),(0,'7'), (9,'7'),(9,'7'),  # m9-12
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (10,'M'),(10,'M'), (9,'7'),(9,'7'),  # m13-16
-    (2,'m'),(2,'m'), (5,'M'),(5,'M'), (10,'M'),(10,'M'), (9,'7'),(9,'7'),  # m17-20
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (9,'7'),(9,'7'), (2,'m'),(2,'m'),    # m21-24
-]
-H_DROP1 = [
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (0,'7'),(0,'7'), (9,'7'),(9,'7'),  # m25-28
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (10,'M'),(9,'7'), (2,'m'),(2,'m'),   # m29-32
-]
-H_BREAK = [
-    (2,'m'),(2,'m'), (5,'M'),(5,'M'), (7,'m'),(7,'m'), (9,'7'),(9,'7'),    # m33-36
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (0,'7'),(0,'7'), (9,'7'),(9,'7'),  # m37-40
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (10,'M'),(10,'M'), (9,'7'),(9,'7'),  # m41-44
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (9,'7'),(9,'7'), (2,'m'),(2,'m'),    # m45-48
-]
-H_BUILD2 = [
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (7,'m'),(7,'m'), (9,'7'),(9,'7'),  # m49-52
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (9,'7'),(9,'7'), (9,'7'),(9,'7'),  # m53-56
-]
-H_DROP2 = [
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (0,'7'),(0,'7'), (9,'7'),(9,'7'),
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (10,'M'),(9,'7'), (2,'m'),(2,'m'),
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (0,'7'),(0,'7'), (9,'7'),(9,'7'),
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (10,'M'),(9,'7'), (2,'m'),(2,'m'),
-]
-H_BREAK2 = [
-    (2,'m'),(2,'m'), (5,'M'),(5,'M'), (7,'m'),(7,'m'), (9,'7'),(9,'7'),
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (9,'7'),(9,'7'), (2,'m'),(2,'m'),
-]
-H_DROP3 = [
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (0,'7'),(0,'7'), (9,'7'),(9,'7'),
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (10,'M'),(9,'7'), (2,'m'),(2,'m'),
-    (2,'m'),(2,'m'), (10,'M'),(10,'M'), (0,'7'),(0,'7'), (9,'7'),(9,'7'),
-    (2,'m'),(2,'m'), (7,'m'),(7,'m'), (9,'7'),(9,'7'), (2,'m'),(2,'m'),
-]
-H_OUTRO = [(2,'m'),(2,'m'), (7,'m'),(7,'m'), (9,'7'),(9,'7'), (2,'m'),(2,'m')] * 2
+# Slower harmonic rhythm — chords change every 2-4 bars mostly.
+# Dm-centered with gentle modal borrowing.
 
-ALL_H = H_INTRO + H_BUILD1 + H_DROP1 + H_BREAK + H_BUILD2 + H_DROP2 + H_BREAK2 + H_DROP3 + H_OUTRO
+def _h(bars, chords):
+    """Expand a chord list to half-bar granularity for N bars."""
+    out = []
+    per_bar = len(chords)
+    if per_bar == 1:
+        return chords * (bars * 2)
+    # Distribute chords evenly across bars
+    total_halves = bars * 2
+    per_chord = total_halves // per_bar
+    for c in chords:
+        out.extend([c] * per_chord)
+    # Pad if needed
+    while len(out) < total_halves:
+        out.append(chords[-1])
+    return out[:total_halves]
+
+# Section A: m1-8 — pure Dm
+H_A = _h(8, [(2,'m')])
+
+# Section B: m9-16 — Dm with gentle motion to Gm and A7
+H_B = _h(4, [(2,'m')]) + _h(2, [(7,'m')]) + _h(2, [(9,'7')])
+
+# Section C: m17-28 — more harmonic variety
+H_C = (
+    _h(4, [(2,'m'), (10,'M')]) +     # m17-20
+    _h(4, [(5,'M'), (9,'7')]) +       # m21-24
+    _h(4, [(2,'m'), (7,'m')])         # m25-28
+)
+
+# Section D: m29-44 — richer progression
+H_D = (
+    _h(4, [(2,'m'), (10,'M')]) +     # m29-32
+    _h(4, [(0,'7'), (9,'7')]) +       # m33-36
+    _h(4, [(2,'m'), (5,'M')]) +       # m37-40
+    _h(4, [(7,'m'), (9,'7')])         # m41-44
+)
+
+# Section E: m45-60 — harmonic tension
+H_E = (
+    _h(4, [(2,'m'), (10,'M')]) +     # m45-48
+    _h(4, [(0,'7'), (9,'7')]) +       # m49-52
+    _h(4, [(5,'M'), (7,'m')]) +       # m53-56
+    _h(4, [(9,'7'), (2,'m')])         # m57-60
+)
+
+# Section F: m61-72 — returning home
+H_F = (
+    _h(4, [(2,'m'), (7,'m')]) +       # m61-64
+    _h(4, [(10,'M'), (9,'7')]) +      # m65-68
+    _h(4, [(2,'m')])                  # m69-72
+)
+
+# Section G: m73-80 — Dm pedal
+H_G = _h(8, [(2,'m')])
+
+ALL_H = H_A + H_B + H_C + H_D + H_E + H_F + H_G
 
 def harm(tick):
     idx = tick // HALF
@@ -141,106 +161,40 @@ class V:
             p += iv
             self.n(p, rhythm[min(i+1, len(rhythm)-1)], vel)
 
-    def arp_pattern(self, root_pc, qual, base, bars, dur=SIXTEENTH, vel=70):
-        """Arpeggiate chord for N bars."""
-        pitches = chord_pitches(root_pc, qual, base)
-        pitches_ext = pitches + [p + 12 for p in pitches]  # extend up
-        total = bars * MEASURE
-        written = 0
-        idx = 0
-        while written < total:
-            p = pitches_ext[idx % len(pitches_ext)]
-            d = min(dur, total - written)
-            self.n(p, d, vel)
-            written += d
-            idx += 1
-
 
 def compose():
     # 12 voices: channels 0-11
-    lead     = V(0)   # Lead melody
-    pad      = V(1)   # Sustained chords
-    arp      = V(2)   # Arpeggios
-    sub      = V(3)   # Sub bass
-    pluck    = V(4)   # Plucked fragments
-    stab     = V(5)   # Chord stabs
-    hihat    = V(6)   # Hi-hat (pitched high)
-    kick     = V(7)   # Kick drum (pitched low)
-    clap     = V(8)   # Clap/snare
-    fx       = V(9)   # FX risers
-    acid     = V(10)  # Acid line
-    ssaw     = V(11)  # Supersaw
+    lead     = V(0)
+    pad      = V(1)
+    arp      = V(2)
+    sub      = V(3)
+    pluck    = V(4)
+    stab     = V(5)
+    hihat    = V(6)
+    kick     = V(7)
+    clap     = V(8)
+    fx       = V(9)
+    acid     = V(10)
+    ssaw     = V(11)
 
-    # Standard rhythms
-    R_BASIC = [HALF, HALF, HALF, HALF, HALF, QUARTER, QUARTER, HALF]
-    R_DRIVE = [QUARTER, QUARTER, QUARTER, QUARTER, QUARTER, EIGHTH, EIGHTH, HALF]
-    R_SHORT = [EIGHTH, EIGHTH, EIGHTH, EIGHTH, EIGHTH, SIXTEENTH, SIXTEENTH, QUARTER]
-    R_AUG   = [WHOLE, WHOLE, WHOLE, WHOLE, WHOLE, HALF, HALF, WHOLE]
+    # Rhythm templates
+    R_BASIC  = [HALF, HALF, HALF, HALF, HALF, QUARTER, QUARTER, HALF]
+    R_DRIVE  = [QUARTER, QUARTER, QUARTER, QUARTER, QUARTER, EIGHTH, EIGHTH, HALF]
+    R_SHORT  = [EIGHTH, EIGHTH, EIGHTH, EIGHTH, EIGHTH, SIXTEENTH, SIXTEENTH, QUARTER]
+    R_AUG    = [WHOLE, WHOLE, WHOLE, WHOLE, WHOLE, HALF, HALF, WHOLE]
+    R_DOTTED = [DOTTED_Q, EIGHTH, DOTTED_Q, EIGHTH, HALF, EIGHTH, EIGHTH, DOTTED_Q]
+    R_PLUCK  = [SIXTEENTH] * 8
 
-    # ════════════════════════════════════════
-    # INTRO (m1-8): Kick + hi-hat + sub bass
-    # ════════════════════════════════════════
+    # Helper: add a chord pad for N bars starting at tick
+    def pad_chord(tick, bars, vel=45):
+        rpc, qual = harm(tick)
+        for p in chord_pitches(rpc, qual, 55):
+            pad.notes.append((tick, p, bars * MEASURE, vel))
+        for p in chord_pitches(rpc, qual, 67):
+            pad.notes.append((tick, p, bars * MEASURE, int(vel * 0.7)))
 
-    # Kick: four-on-the-floor
-    for bar in range(8):
-        for beat in range(4):
-            kick.go(bar * MEASURE + beat * QUARTER)
-            kick.n(36, EIGHTH, 100)  # C2 = kick
-
-    # Hi-hat: eighth notes, accented on off-beats
-    for bar in range(8):
-        for eighth in range(8):
-            hihat.go(bar * MEASURE + eighth * EIGHTH)
-            vel = 90 if eighth % 2 == 1 else 60  # off-beat accent
-            hihat.n(80, EIGHTH, vel)  # G#5 = closed hi-hat range
-
-    # Sub bass: D1 pedal, pulsing quarter notes
-    for bar in range(8):
-        for beat in range(4):
-            sub.go(bar * MEASURE + beat * QUARTER)
-            sub.n(38, EIGHTH, 90)  # D2
-            sub.r(EIGHTH)  # rest = pumping
-
-    # Clap on beats 2 and 4
-    for bar in range(4, 8):  # enters at m5
-        for beat in [1, 3]:
-            clap.go(bar * MEASURE + beat * QUARTER)
-            clap.n(74, EIGHTH, 85)
-
-    # FX: rising sweep m7-8
-    fx.go(6 * MEASURE)
-    for i in range(32):
-        p = 60 + i  # chromatic rise from C4 to G#5
-        fx.n(p, SIXTEENTH, 40 + i)
-
-    # All other voices rest during intro
-    for v in [lead, pad, arp, pluck, stab, acid, ssaw]:
-        v.r(8 * MEASURE)
-
-    # ════════════════════════════════════════
-    # BUILD 1 (m9-24): Subject enters, layers build
-    # ════════════════════════════════════════
-    t9 = 8 * MEASURE
-
-    # Lead: subject on D4(62), basic rhythm
-    lead.go(t9)
-    lead.subj(62, SUBJ, R_BASIC, vel=90)
-    # Lead: subject again on A4(69) — answer
-    lead.subj(69, ANS, R_DRIVE, vel=85)
-
-    # Pad: sustained Dm chord m9-16
-    pad.go(t9)
-    for bar_group in range(4):  # 4 groups of 4 bars
-        rpc, qual = harm(t9 + bar_group * 4 * MEASURE)
-        pts = chord_pitches(rpc, qual, 55)
-        for p in pts:
-            pad.notes.append((t9 + bar_group * 4 * MEASURE, p, 4 * MEASURE, 50))
-        pad.c = t9 + (bar_group + 1) * 4 * MEASURE
-
-    # Arp: starts m13, sixteenth arpeggios
-    arp.go(t9 + 4 * MEASURE)
-    for bar in range(12):  # m13-24
-        tick = t9 + (4 + bar) * MEASURE
+    # Helper: arp pattern for one bar
+    def arp_bar(tick, dur=SIXTEENTH, vel=55):
         rpc, qual = harm(tick)
         base = 62
         while (base % 12) != rpc:
@@ -249,491 +203,404 @@ def compose():
             base -= 12
         pts = chord_pitches(rpc, qual, base)
         pts_ext = pts + [p + 12 for p in pts] + [p + 24 for p in pts[:2]]
-        idx = 0
+        notes_per_bar = MEASURE // dur
         arp.go(tick)
-        for _ in range(16):  # 16 sixteenths per bar
-            arp.n(pts_ext[idx % len(pts_ext)], SIXTEENTH, 70)
-            idx += 1
+        for i in range(notes_per_bar):
+            arp.n(pts_ext[i % len(pts_ext)], dur, vel)
 
-    # Acid: enters m17, 303-style line
-    acid.go(t9 + 8 * MEASURE)
-    # Subject in acid style: short staccato with slides
-    acid.subj(50, SUBJ, R_SHORT, vel=85)
-    # Then inverted
-    acid.subj(57, INV, R_SHORT, vel=80)
+    # Helper: sub bass root for one bar
+    def sub_bar(tick, dur=HALF, vel=80):
+        rpc, _ = harm(tick)
+        bass_p = 26 + rpc
+        if bass_p < 28:
+            bass_p += 12
+        notes_per_bar = MEASURE // dur
+        sub.go(tick)
+        for _ in range(notes_per_bar):
+            sub.n(bass_p, dur, vel)
 
-    # Continue kick, hihat, sub, clap through build
-    for bar in range(8, 24):
-        for beat in range(4):
-            kick.go(bar * MEASURE + beat * QUARTER)
-            kick.n(36, EIGHTH, 100)
-        for eighth in range(8):
-            hihat.go(bar * MEASURE + eighth * EIGHTH)
-            vel = 95 if eighth % 2 == 1 else 65
-            hihat.n(80, EIGHTH, vel)
-        for beat in range(4):
-            sub.go(bar * MEASURE + beat * QUARTER)
-            rpc, _ = harm(bar * MEASURE)
-            bass_p = 26 + rpc  # very low
-            if bass_p < 28: bass_p += 12
-            sub.n(bass_p, EIGHTH, 95)
-        if bar >= 8:
-            for beat in [1, 3]:
-                clap.go(bar * MEASURE + beat * QUARTER)
-                clap.n(74, EIGHTH, 85)
+    # Helper: simple kick pattern for one bar
+    def kick_bar(tick, vel=75, pattern='half'):
+        kick.go(tick)
+        if pattern == 'half':
+            kick.n(36, EIGHTH, vel)
+            kick.r(HALF - EIGHTH)
+            kick.n(36, EIGHTH, int(vel * 0.7))
+            kick.r(HALF - EIGHTH)
+        elif pattern == 'quarter':
+            for _ in range(4):
+                kick.n(36, EIGHTH, vel)
+                kick.r(QUARTER - EIGHTH)
 
-    # FX: riser before drop (m23-24)
-    fx.go(22 * MEASURE)
-    for i in range(64):
-        p = 55 + (i * 30) // 64  # sweep up
-        fx.n(p, EIGHTH if i < 48 else SIXTEENTH, 30 + i)
+    # Helper: hihat for one bar
+    def hihat_bar(tick, vel=50, density='quarter'):
+        if density == 'quarter':
+            for beat in range(4):
+                hihat.go(tick + beat * QUARTER)
+                hihat.n(80, QUARTER, vel)
+        elif density == 'eighth':
+            for e in range(8):
+                hihat.go(tick + e * EIGHTH)
+                v = vel if e % 2 == 0 else int(vel * 1.2)
+                hihat.n(80, EIGHTH, v)
 
-    # Pluck: subject fragments m17-24
-    pluck.go(t9 + 8 * MEASURE)
-    pluck.subj(74, SUBJ, [EIGHTH, EIGHTH, EIGHTH, EIGHTH, EIGHTH, SIXTEENTH, SIXTEENTH, EIGHTH], vel=75)
-    pluck.r(MEASURE)
-    pluck.subj(69, ANS, [EIGHTH, EIGHTH, EIGHTH, EIGHTH, EIGHTH, SIXTEENTH, SIXTEENTH, EIGHTH], vel=70)
+    # Helper: clap on beat 3
+    def clap_bar(tick, vel=65):
+        clap.go(tick + 2 * QUARTER)
+        clap.n(74, EIGHTH, vel)
 
-    # ════════════════════════════════════════
-    # DROP 1 (m25-32): FULL BLAST
-    # ════════════════════════════════════════
-    t25 = 24 * MEASURE
-
-    # Supersaw: massive subject statement
-    ssaw.go(t25)
-    ssaw.subj(74, SUBJ, R_DRIVE, vel=100)
-    ssaw.subj(69, INV, R_DRIVE, vel=95)
-
-    # Lead: inverted subject on top
-    lead.go(t25)
-    lead.subj(81, INV, R_DRIVE, vel=90)
-    lead.subj(74, SUBJ, R_SHORT, vel=85)
-
-    # Stab: off-beat chord stabs
-    for bar in range(8):
-        tick = t25 + bar * MEASURE
+    # Helper: off-beat stab for one bar
+    def stab_bar(tick, vel=60):
         rpc, qual = harm(tick)
         pts = chord_pitches(rpc, qual, 62)
         for beat_off in [EIGHTH, QUARTER + EIGHTH, 2*QUARTER + EIGHTH, 3*QUARTER + EIGHTH]:
-            stab.go(tick + beat_off)
             for p in pts:
-                stab.notes.append((tick + beat_off, p, EIGHTH, 80))
-            stab.c = tick + beat_off + EIGHTH
+                stab.notes.append((tick + beat_off, p, EIGHTH, vel))
 
-    # Arp: double-time (32nd notes!)
-    for bar in range(8):
-        tick = t25 + bar * MEASURE
-        rpc, qual = harm(tick)
-        base = 62
-        while (base % 12) != rpc: base += 1
-        if base > 72: base -= 12
-        pts = chord_pitches(rpc, qual, base)
-        pts_ext = pts + [p + 12 for p in pts] + [p - 12 for p in pts]
-        pts_ext.sort()
-        arp.go(tick)
-        for i in range(32):  # 32 thirty-seconds per bar
-            arp.n(pts_ext[i % len(pts_ext)], THIRTYSECOND, 65)
+    # ════════════════════════════════════════════════
+    # A: SOLO (m1-8) — Pad holds Dm, Lead plays subject
+    # ════════════════════════════════════════════════
 
-    # Acid: wild acid line
-    acid.go(t25)
-    acid.subj(50, SUBJ, R_SHORT, vel=90)
-    acid.subj(45, ANS, R_SHORT, vel=85)
-    acid.subj(50, INV, R_SHORT, vel=88)
-    acid.subj(57, INV_ANS, R_SHORT, vel=82)
+    # Pad: sustained Dm chord across 8 bars
+    pad_chord(0, 8, vel=40)
 
-    # Pad: huge sustained chords
-    for bar_g in range(2):
-        tick = t25 + bar_g * 4 * MEASURE
-        rpc, qual = harm(tick)
-        for p in chord_pitches(rpc, qual, 50):
-            pad.notes.append((tick, p, 4 * MEASURE, 60))
-        # Add upper voicing too
-        for p in chord_pitches(rpc, qual, 67):
-            pad.notes.append((tick, p, 4 * MEASURE, 45))
+    # Lead: subject, unhurried
+    lead.go(MEASURE)  # start at m2 for breathing room
+    lead.subj(62, SUBJ, R_BASIC, vel=75)
+    # Rest, then answer
+    lead.r(MEASURE)
+    lead.subj(69, ANS, R_BASIC, vel=70)
 
-    # Pluck: rapid-fire subject fragments
-    pluck.go(t25)
-    for rep in range(4):
-        pluck.subj(74 - rep * 5, SUBJ, [SIXTEENTH]*8, vel=70)
+    # FX: gentle texture — a slow ascending sweep m5-8
+    fx.go(4 * MEASURE)
+    for i in range(16):
+        p = 55 + i
+        fx.n(p, QUARTER, 25 + i)
 
-    # Kick, hihat, sub, clap continue with more energy
-    for bar in range(24, 32):
-        for beat in range(4):
-            kick.go(bar * MEASURE + beat * QUARTER)
-            kick.n(36, EIGHTH, 110)
-        for sixteenth in range(16):
-            hihat.go(bar * MEASURE + sixteenth * SIXTEENTH)
-            vel = 100 if sixteenth % 4 == 2 else (80 if sixteenth % 2 == 1 else 55)
-            hihat.n(82 if sixteenth % 4 == 2 else 80, SIXTEENTH, vel)  # open hat on "and"
-        for beat in range(4):
-            sub.go(bar * MEASURE + beat * QUARTER)
-            rpc, _ = harm(bar * MEASURE)
-            sub.n(26 + rpc if 26 + rpc >= 28 else 26 + rpc + 12, EIGHTH, 100)
-        for beat in [1, 3]:
-            clap.go(bar * MEASURE + beat * QUARTER)
-            clap.n(74, EIGHTH, 95)
+    # ════════════════════════════════════════════════
+    # B: ECHO (m9-16) — Lead repeats, Pluck enters
+    # ════════════════════════════════════════════════
+    t9 = 8 * MEASURE
 
-    # ════════════════════════════════════════
-    # BREAKDOWN (m33-48): stripped back
-    # ════════════════════════════════════════
-    t33 = 32 * MEASURE
+    # Pad: evolving chords
+    pad_chord(t9, 4, vel=45)
+    pad_chord(t9 + 4 * MEASURE, 4, vel=50)
 
-    # Pad: exposed subject in long notes
-    pad.go(t33)
-    pad.subj(62, SUBJ, R_AUG, vel=55)
+    # Lead: subject in driving rhythm
+    lead.go(t9)
+    lead.subj(62, SUBJ, R_DRIVE, vel=80)
+    lead.subj(69, ANS, R_DRIVE, vel=75)
 
-    # Acid: solo acid subject, slinky
-    acid.go(t33)
-    acid.subj(50, SUBJ, [DOTTED_Q, EIGHTH, DOTTED_Q, EIGHTH, HALF, EIGHTH, EIGHTH, DOTTED_Q], vel=80)
+    # Pluck: enters! Staccato subject echo — the star of the show
+    pluck.go(t9 + 2 * MEASURE)  # enters at m11
+    pluck.subj(74, SUBJ, R_PLUCK, vel=60)
+    pluck.r(MEASURE)
+    pluck.subj(69, ANS, R_PLUCK, vel=55)
+    pluck.r(MEASURE)
+    # Descending repetitions
+    pluck.subj(71, SUBJ, R_PLUCK, vel=62)
+    pluck.r(HALF)
+    pluck.subj(66, INV, R_PLUCK, vel=58)
+
+    # Sub bass: enters with gentle root pedal
+    for bar in range(8, 16):
+        sub_bar(bar * MEASURE, dur=WHOLE, vel=65)
+
+    # ════════════════════════════════════════════════
+    # C: CONVERSATION (m17-28) — Acid joins, call & response
+    # ════════════════════════════════════════════════
+    t17 = 16 * MEASURE
+
+    # Pad: continuous
+    for group_start in range(16, 28, 4):
+        pad_chord(group_start * MEASURE, 4, vel=48)
+
+    # Lead: subject variations, different registers
+    lead.go(t17)
+    lead.subj(74, SUBJ, R_DRIVE, vel=80)
+    lead.r(MEASURE)
+    lead.subj(62, INV, R_DRIVE, vel=75)
+    lead.r(MEASURE)
+    lead.subj(69, ANS, R_DOTTED, vel=78)
+
+    # Acid: enters! Subject cycling in short staccato
+    acid.go(t17)
+    acid.subj(50, SUBJ, R_SHORT, vel=70)
+    acid.subj(57, INV, R_SHORT, vel=65)
+    acid.r(HALF)
+    acid.subj(45, ANS, R_SHORT, vel=72)
+    acid.subj(50, INV_ANS, R_SHORT, vel=68)
+    # Continue with varied pitches
     acid.r(MEASURE)
-    acid.subj(57, INV, [DOTTED_Q, EIGHTH, DOTTED_Q, EIGHTH, HALF, EIGHTH, EIGHTH, DOTTED_Q], vel=75)
-
-    # Hi-hat: just closed hats, sparse
-    for bar in range(32, 48):
-        for beat in range(4):
-            hihat.go(bar * MEASURE + beat * QUARTER)
-            hihat.n(80, QUARTER, 50)
-
-    # Kick: half-time feel
-    for bar in range(32, 48):
-        kick.go(bar * MEASURE)
-        kick.n(36, EIGHTH, 90)
-        kick.go(bar * MEASURE + 2 * QUARTER + EIGHTH)
-        kick.n(36, EIGHTH, 70)
-
-    # Clap: just on 3
-    for bar in range(32, 48):
-        clap.go(bar * MEASURE + 2 * QUARTER)
-        clap.n(74, EIGHTH, 75)
-
-    # Sub: minimal pulse
-    for bar in range(32, 48):
-        sub.go(bar * MEASURE)
-        rpc, _ = harm(bar * MEASURE)
-        sub.n(26 + rpc if 26 + rpc >= 28 else 26 + rpc + 12, HALF, 80)
+    acid.subj(52, SUBJ, R_DOTTED, vel=70)
+    acid.subj(47, INV, R_SHORT, vel=65)
 
     # Pluck: call and response with acid
-    pluck.go(t33 + 4 * MEASURE)
-    pluck.subj(69, ANS, [QUARTER, QUARTER, QUARTER, QUARTER, QUARTER, EIGHTH, EIGHTH, QUARTER], vel=65)
-    pluck.r(2 * MEASURE)
-    pluck.subj(74, SUBJ, [QUARTER, QUARTER, QUARTER, QUARTER, QUARTER, EIGHTH, EIGHTH, QUARTER], vel=60)
+    pluck.go(t17 + 2 * MEASURE)  # m19
+    pluck.subj(74, SUBJ, R_PLUCK, vel=65)
+    pluck.r(MEASURE)  # acid plays
+    pluck.subj(69, INV, R_PLUCK, vel=60)
+    pluck.r(MEASURE)
+    pluck.subj(71, ANS, R_PLUCK, vel=63)
+    pluck.r(HALF)
+    pluck.subj(76, SUBJ, R_PLUCK, vel=67)
+    # Rapid descending cascade
+    for i in range(3):
+        pluck.subj(74 - i * 3, SUBJ, R_PLUCK, vel=60 + i * 3)
 
-    # Arp: sparse, filtered feel — just roots and 5ths
-    for bar in range(32, 48):
-        tick = bar * MEASURE
+    # Arp: gentle sixteenths, enters at m21
+    for bar in range(20, 28):
+        arp_bar(bar * MEASURE, dur=SIXTEENTH, vel=45 + (bar - 20) * 2)
+
+    # Kick: enters softly at m21
+    for bar in range(20, 28):
+        kick_bar(bar * MEASURE, vel=55 + (bar - 20), pattern='half')
+
+    # Sub bass: continuous
+    for bar in range(16, 28):
+        sub_bar(bar * MEASURE, dur=HALF, vel=70)
+
+    # FX: subtle texture m25-28
+    fx.go(24 * MEASURE)
+    for i in range(24):
+        fx.n(58 + (i * 20) // 24, QUARTER, 20 + i)
+
+    # ════════════════════════════════════════════════
+    # D: ACCUMULATION (m29-44) — All melodic voices
+    # ════════════════════════════════════════════════
+    t29 = 28 * MEASURE
+
+    # Pad: richer voicings
+    for group_start in range(28, 44, 4):
+        tick = group_start * MEASURE
         rpc, qual = harm(tick)
-        base = 60
-        while (base % 12) != rpc: base += 1
-        if base > 72: base -= 12
-        arp.go(tick)
-        arp.n(base, QUARTER, 40)
-        arp.n(base + 7, QUARTER, 40)
-        arp.n(base + 12, QUARTER, 40)
-        arp.n(base + 7, QUARTER, 40)
+        for octave_base in [48, 55, 67]:
+            for p in chord_pitches(rpc, qual, octave_base):
+                pad.notes.append((tick, p, 4 * MEASURE, 42))
 
-    # ════════════════════════════════════════
-    # BUILD 2 (m49-56): Rising FX, stretto entries
-    # ════════════════════════════════════════
-    t49 = 48 * MEASURE
+    # Lead: subject in multiple registers
+    lead.go(t29)
+    lead.subj(74, SUBJ, R_DRIVE, vel=82)
+    lead.subj(69, INV, R_DRIVE, vel=78)
+    lead.r(MEASURE)
+    lead.subj(81, SUBJ, R_SHORT, vel=80)
+    lead.subj(74, ANS, R_DRIVE, vel=76)
+    # Higher register
+    lead.r(2 * MEASURE)
+    lead.subj(86, SUBJ, R_DRIVE, vel=75)
+    lead.subj(81, INV, R_DOTTED, vel=72)
 
-    # Lead: stretto — subject, then answer 1 beat later in stab
-    lead.go(t49)
-    lead.subj(62, SUBJ, R_DRIVE, vel=85)
-    # Second entry 2 bars later
-    lead.subj(69, ANS, R_DRIVE, vel=80)
+    # Pluck: THIS IS THE STAR — rapid descending fragments, lots of them
+    pluck.go(t29)
+    # Cascade 1: descending by 3 semitones
+    for i in range(6):
+        pluck.subj(76 - i * 3, SUBJ, R_PLUCK, vel=65 + i * 2)
+    # Cascade 2: ascending by 4, inversions
+    pluck.r(MEASURE)
+    for i in range(4):
+        pluck.subj(62 + i * 4, INV, R_PLUCK, vel=68 + i * 2)
+    # Cascade 3: mixed forms
+    pluck.r(HALF)
+    for i in range(5):
+        form = [SUBJ, ANS, INV, INV_ANS, SUBJ][i]
+        pluck.subj(74 - i * 2, form, R_PLUCK, vel=70)
 
-    # Stab: inversion entering 1 beat after lead
-    stab.go(t49 + QUARTER)
-    stab.subj(69, INV, R_DRIVE, vel=80)
+    # Acid: cycling through all forms with varied pitches
+    acid.go(t29)
+    acid.subj(50, SUBJ, R_SHORT, vel=75)
+    acid.subj(57, INV, R_SHORT, vel=72)
+    acid.subj(45, ANS, R_SHORT, vel=74)
+    acid.subj(52, INV_ANS, R_SHORT, vel=70)
+    # Second round at different pitches
+    acid.subj(55, SUBJ, R_DOTTED, vel=73)
+    acid.subj(48, INV, R_SHORT, vel=70)
+    acid.subj(50, ANS, R_DOTTED, vel=72)
+    acid.subj(57, SUBJ, R_SHORT, vel=75)
 
-    # Pluck: answer entering 2 beats after
-    pluck.go(t49 + HALF)
-    pluck.subj(57, ANS, R_DRIVE, vel=75)
+    # Supersaw: enters with augmented subject underneath
+    ssaw.go(t29 + 4 * MEASURE)  # m33
+    ssaw.subj(62, SUBJ, R_AUG, vel=55)
 
-    # FX: massive riser across all 8 bars
-    fx.go(t49)
-    for i in range(128):
-        p = 48 + (i * 36) // 128  # sweep from C3 to Bb5
-        vel = 20 + (i * 80) // 128
-        fx.n(p, SIXTEENTH, vel)
+    # Stab: sparse off-beat color
+    for bar in range(32, 44):
+        if bar % 2 == 0:  # every other bar
+            stab_bar(bar * MEASURE, vel=50 + (bar - 32))
 
-    # Acid: building intensity
-    acid.go(t49)
-    acid.subj(50, SUBJ, R_SHORT, vel=80)
-    acid.subj(45, INV, R_SHORT, vel=85)
-    acid.subj(50, ANS, R_SHORT, vel=90)
-    acid.subj(57, SUBJ, R_SHORT, vel=95)
+    # Arp: sixteenths throughout, gradually louder
+    for bar in range(28, 44):
+        arp_bar(bar * MEASURE, dur=SIXTEENTH, vel=50 + (bar - 28))
 
-    # Continue drums, building fills
-    for bar in range(48, 56):
-        intensity = (bar - 48) / 8  # 0 to 1
-        for beat in range(4):
-            kick.go(bar * MEASURE + beat * QUARTER)
-            kick.n(36, EIGHTH, int(80 + 30 * intensity))
-        for sixteenth in range(16):
-            hihat.go(bar * MEASURE + sixteenth * SIXTEENTH)
-            hihat.n(80, SIXTEENTH, int(50 + 50 * intensity))
-        for beat in [1, 3]:
-            clap.go(bar * MEASURE + beat * QUARTER)
-            clap.n(74, EIGHTH, int(70 + 25 * intensity))
-        sub.go(bar * MEASURE)
-        rpc, _ = harm(bar * MEASURE)
-        sub.n(26 + rpc if 26 + rpc >= 28 else 26 + rpc + 12, QUARTER, int(80 + 20 * intensity))
+    # Drums: kick + hihat enter, build slowly
+    for bar in range(28, 44):
+        intensity = (bar - 28) / 16  # 0 to 1
+        kick_bar(bar * MEASURE, vel=int(60 + 20 * intensity), pattern='half')
+        if bar >= 32:
+            hihat_bar(bar * MEASURE, vel=int(35 + 20 * intensity), density='quarter')
+        if bar >= 36:
+            clap_bar(bar * MEASURE, vel=int(45 + 15 * intensity))
 
-    # Snare roll m55-56
-    for i in range(32):
-        clap.go(54 * MEASURE + i * EIGHTH)
-        clap.n(74, EIGHTH, 60 + i * 2)
+    # Sub: continuous, following harmony
+    for bar in range(28, 44):
+        sub_bar(bar * MEASURE, dur=HALF, vel=75)
 
-    # ════════════════════════════════════════
-    # DROP 2 (m57-72): MAXIMUM ENERGY
-    # ════════════════════════════════════════
-    t57 = 56 * MEASURE
+    # ════════════════════════════════════════════════
+    # E: DENSITY (m45-60) — Stretto, maximum melodic layering
+    # ════════════════════════════════════════════════
+    t45 = 44 * MEASURE
 
-    # Supersaw: HUGE subject + inversion stretto
-    ssaw.go(t57)
-    ssaw.subj(74, SUBJ, R_DRIVE, vel=110)
-    ssaw.subj(69, INV, R_DRIVE, vel=105)
-    ssaw.subj(74, ANS, R_SHORT, vel=100)
-    ssaw.subj(81, SUBJ, R_SHORT, vel=105)
-
-    # Lead: counter-melody, inverted subject high
-    lead.go(t57)
-    lead.subj(81, INV, R_DRIVE, vel=95)
-    lead.subj(76, SUBJ, R_DRIVE, vel=90)
-    lead.subj(81, ANS, R_SHORT, vel=88)
-    lead.subj(74, INV_ANS, R_SHORT, vel=85)
-
-    # Stab: massive chord stabs every beat
-    for bar in range(16):
-        tick = t57 + bar * MEASURE
-        rpc, qual = harm(tick)
-        pts = chord_pitches(rpc, qual, 55)
-        pts2 = chord_pitches(rpc, qual, 67)
-        for beat in range(4):
-            t_beat = tick + beat * QUARTER
-            stab.go(t_beat)
-            for p in pts + pts2:
-                stab.notes.append((t_beat, p, EIGHTH, 85))
-            stab.c = t_beat + EIGHTH
-
-    # Arp: insane 32nd note arpeggios
-    for bar in range(16):
-        tick = t57 + bar * MEASURE
-        rpc, qual = harm(tick)
-        base = 60
-        while (base % 12) != rpc: base += 1
-        if base > 72: base -= 12
-        pts = chord_pitches(rpc, qual, base)
-        pts_up = pts + [p + 12 for p in pts] + [p + 24 for p in pts[:2]]
-        pts_down = list(reversed(pts_up))
-        combined = pts_up + pts_down
-        arp.go(tick)
-        for i in range(32):
-            arp.n(combined[i % len(combined)], THIRTYSECOND, 60 + (i % 8) * 3)
-
-    # Acid: aggressive pattern
-    acid.go(t57)
-    for rep in range(4):
-        acid.subj(50 + rep * 2, SUBJ, R_SHORT, vel=90)
-        acid.subj(57 - rep, INV, R_SHORT, vel=88)
-
-    # Pluck: rapid repeated subject
-    pluck.go(t57)
-    for rep in range(8):
-        pluck.subj(74 - (rep % 4) * 5, SUBJ, [SIXTEENTH]*8, vel=75)
-
-    # Pad: walls of sound
-    for bar_g in range(4):
-        tick = t57 + bar_g * 4 * MEASURE
-        rpc, qual = harm(tick)
-        for p in chord_pitches(rpc, qual, 48):
-            pad.notes.append((tick, p, 4 * MEASURE, 55))
-        for p in chord_pitches(rpc, qual, 60):
-            pad.notes.append((tick, p, 4 * MEASURE, 50))
-        for p in chord_pitches(rpc, qual, 72):
-            pad.notes.append((tick, p, 4 * MEASURE, 40))
-
-    # Full drums
-    for bar in range(56, 72):
-        for beat in range(4):
-            kick.go(bar * MEASURE + beat * QUARTER)
-            kick.n(36, EIGHTH, 115)
-        for sixteenth in range(16):
-            hihat.go(bar * MEASURE + sixteenth * SIXTEENTH)
-            vel = 105 if sixteenth % 4 == 2 else (85 if sixteenth % 2 == 1 else 60)
-            pitch = 82 if sixteenth % 4 == 2 else 80
-            hihat.n(pitch, SIXTEENTH, vel)
-        for beat in [1, 3]:
-            clap.go(bar * MEASURE + beat * QUARTER)
-            clap.n(74, EIGHTH, 100)
-        for beat in range(4):
-            sub.go(bar * MEASURE + beat * QUARTER)
-            rpc, _ = harm(bar * MEASURE)
-            sub.n(26 + rpc if 26 + rpc >= 28 else 26 + rpc + 12, EIGHTH, 105)
-
-    # ════════════════════════════════════════
-    # BREAKDOWN 2 (m73-80): Half-time
-    # ════════════════════════════════════════
-    t73 = 72 * MEASURE
-
-    # Lead: exposed subject, emotional
-    lead.go(t73)
-    lead.subj(74, SUBJ, [DOTTED_H, HALF, DOTTED_H, HALF, WHOLE, QUARTER, QUARTER, DOTTED_H], vel=75)
-
-    # Pad: gentle chords
-    for bar_g in range(2):
-        tick = t73 + bar_g * 4 * MEASURE
-        rpc, qual = harm(tick)
-        for p in chord_pitches(rpc, qual, 55):
-            pad.notes.append((tick, p, 4 * MEASURE, 40))
-
-    # Sparse drums
-    for bar in range(72, 80):
-        kick.go(bar * MEASURE)
-        kick.n(36, EIGHTH, 80)
-        kick.go(bar * MEASURE + 2 * QUARTER + EIGHTH)
-        kick.n(36, EIGHTH, 60)
-        clap.go(bar * MEASURE + 2 * QUARTER)
-        clap.n(74, EIGHTH, 65)
-        for beat in range(4):
-            hihat.go(bar * MEASURE + beat * QUARTER)
-            hihat.n(80, QUARTER, 45)
-        sub.go(bar * MEASURE)
-        rpc, _ = harm(bar * MEASURE)
-        sub.n(26 + rpc if 26 + rpc >= 28 else 26 + rpc + 12, WHOLE, 70)
-
-    # FX: riser again
-    fx.go(t73 + 4 * MEASURE)
-    for i in range(64):
-        p = 50 + (i * 38) // 64
-        fx.n(p, SIXTEENTH, 25 + i)
-
-    # Acid: minimal
-    acid.go(t73)
-    acid.subj(50, SUBJ, [HALF, HALF, HALF, HALF, HALF, QUARTER, QUARTER, HALF], vel=60)
-
-    # ════════════════════════════════════════
-    # DROP 3 / FINALE (m81-96): AUGMENTED SUBJECT + EVERYTHING
-    # ════════════════════════════════════════
-    t81 = 80 * MEASURE
-
-    # Sub bass: AUGMENTED subject — each note = whole note
-    sub.go(t81)
-    sub.subj(26, SUBJ, R_AUG, vel=110)
-    # Second augmented statement
-    sub.subj(33, ANS, R_AUG, vel=105)
-
-    # Supersaw: triple subject stretto
-    ssaw.go(t81)
-    ssaw.subj(74, SUBJ, R_DRIVE, vel=110)
-    ssaw.subj(69, INV, R_SHORT, vel=105)
-    ssaw.subj(81, SUBJ, R_DRIVE, vel=100)
-    ssaw.subj(74, ANS, R_SHORT, vel=100)
-    ssaw.subj(69, SUBJ, R_DRIVE, vel=95)
-    ssaw.subj(76, INV_ANS, R_SHORT, vel=90)
-
-    # Lead: soaring melody over everything
-    lead.go(t81)
-    lead.subj(81, SUBJ, R_DRIVE, vel=95)
-    lead.subj(76, INV, R_DRIVE, vel=90)
-    lead.subj(81, ANS, R_DRIVE, vel=88)
-    lead.subj(74, SUBJ, R_SHORT, vel=90)
-    lead.subj(81, INV_ANS, R_SHORT, vel=85)
-    lead.subj(69, SUBJ, R_DRIVE, vel=92)
-
-    # Acid: relentless
-    acid.go(t81)
-    for rep in range(8):
-        acid.subj(50 + (rep % 3) * 3, SUBJ, R_SHORT, vel=85)
-
-    # Stab: power chords on every beat
-    for bar in range(16):
-        tick = t81 + bar * MEASURE
-        rpc, qual = harm(tick)
-        pts = chord_pitches(rpc, qual, 55) + chord_pitches(rpc, qual, 67)
-        for beat in range(4):
-            t_beat = tick + beat * QUARTER
-            for p in pts:
-                stab.notes.append((t_beat, p, EIGHTH, 90))
-
-    # Arp: maximum speed
-    for bar in range(16):
-        tick = t81 + bar * MEASURE
-        rpc, qual = harm(tick)
-        base = 62
-        while (base % 12) != rpc: base += 1
-        if base > 72: base -= 12
-        pts = chord_pitches(rpc, qual, base)
-        pts_ext = pts + [p+12 for p in pts] + [p+24 for p in pts[:2]]
-        arp.go(tick)
-        for i in range(32):
-            arp.n(pts_ext[i % len(pts_ext)], THIRTYSECOND, 70)
-
-    # Pluck: subject fragments everywhere
-    pluck.go(t81)
-    for rep in range(12):
-        pluck.subj(74 - (rep % 5) * 3, SUBJ if rep % 2 == 0 else INV, [SIXTEENTH]*8, vel=70)
-
-    # Pad: massive
-    for bar_g in range(4):
-        tick = t81 + bar_g * 4 * MEASURE
+    # Pad: thick sustained chords
+    for group_start in range(44, 60, 4):
+        tick = group_start * MEASURE
         rpc, qual = harm(tick)
         for octave_base in [43, 55, 67, 79]:
             for p in chord_pitches(rpc, qual, octave_base):
-                pad.notes.append((tick, p, 4 * MEASURE, 45))
+                pad.notes.append((tick, p, 4 * MEASURE, 38))
 
-    # Full drums
-    for bar in range(80, 96):
-        for beat in range(4):
-            kick.go(bar * MEASURE + beat * QUARTER)
-            kick.n(36, EIGHTH, 120)
-        for sixteenth in range(16):
-            hihat.go(bar * MEASURE + sixteenth * SIXTEENTH)
-            vel = 110 if sixteenth % 4 == 2 else (90 if sixteenth % 2 == 1 else 65)
-            hihat.n(82 if sixteenth % 4 == 2 else 80, SIXTEENTH, vel)
-        for beat in [1, 3]:
-            clap.go(bar * MEASURE + beat * QUARTER)
-            clap.n(74, EIGHTH, 105)
+    # Lead: stretto — subject, then overlapping entries
+    lead.go(t45)
+    lead.subj(74, SUBJ, R_DRIVE, vel=85)
+    # Second entry overlaps 1 bar into first
+    lead.go(t45 + 3 * MEASURE)
+    lead.subj(81, INV, R_DRIVE, vel=80)
+    # Third entry
+    lead.go(t45 + 6 * MEASURE)
+    lead.subj(69, ANS, R_SHORT, vel=82)
+    lead.subj(74, SUBJ, R_SHORT, vel=80)
+    # More stretto
+    lead.r(MEASURE)
+    lead.subj(81, SUBJ, R_DRIVE, vel=78)
+    lead.subj(76, INV_ANS, R_SHORT, vel=75)
 
-    # ════════════════════════════════════════
-    # OUTRO (m97-104): Strip down
-    # ════════════════════════════════════════
-    t97 = 96 * MEASURE
+    # Pluck: MAXIMUM — rapid cascading everywhere
+    pluck.go(t45)
+    # Long cascade descending
+    for i in range(8):
+        pluck.subj(79 - i * 3, SUBJ, R_PLUCK, vel=72)
+    # Ascending cascade with inversions
+    for i in range(6):
+        pluck.subj(57 + i * 4, INV, R_PLUCK, vel=68)
+    # Interleaved subject/answer
+    for i in range(6):
+        form = SUBJ if i % 2 == 0 else ANS
+        pluck.subj(74 - i * 2, form, R_PLUCK, vel=70 + i)
 
-    # Lead: final subject statement, fading
-    lead.go(t97)
-    lead.subj(62, SUBJ, R_BASIC, vel=70)
-    lead.subj(62, SUBJ, R_AUG, vel=50)  # echo, dying away
+    # Acid: relentless cycling, building velocity
+    acid.go(t45)
+    for rep in range(10):
+        form = [SUBJ, INV, ANS, INV_ANS][rep % 4]
+        start_p = 50 + (rep % 3) * 3
+        acid.subj(start_p, form, R_SHORT, vel=72 + rep * 2)
 
-    # Pad: final Dm
+    # Supersaw: subject in drive rhythm, powerful
+    ssaw.go(t45)
+    ssaw.subj(74, SUBJ, R_DRIVE, vel=70)
+    ssaw.subj(69, INV, R_DRIVE, vel=68)
+    ssaw.subj(74, ANS, R_DRIVE, vel=72)
+    ssaw.subj(81, SUBJ, R_SHORT, vel=70)
+
+    # Stab: denser — every bar now
+    for bar in range(44, 60):
+        stab_bar(bar * MEASURE, vel=55)
+
+    # Arp: thirty-second notes for maximum shimmer
+    for bar in range(44, 60):
+        arp_bar(bar * MEASURE, dur=THIRTYSECOND, vel=50)
+
+    # Full drums (controlled, not overwhelming)
+    for bar in range(44, 60):
+        kick_bar(bar * MEASURE, vel=75, pattern='quarter')
+        hihat_bar(bar * MEASURE, vel=50, density='eighth')
+        clap_bar(bar * MEASURE, vel=60)
+
+    # Sub: following harmony, quarter-note pulse
+    for bar in range(44, 60):
+        sub_bar(bar * MEASURE, dur=QUARTER, vel=80)
+
+    # FX: textural sweep at peak
+    fx.go(t45 + 8 * MEASURE)  # m53
+    for i in range(32):
+        p = 50 + (i * 30) // 32
+        fx.n(p, SIXTEENTH, 25 + i * 2)
+
+    # ════════════════════════════════════════════════
+    # F: THINNING (m61-72) — Voices drop out gradually
+    # ════════════════════════════════════════════════
+    t61 = 60 * MEASURE
+
+    # Pad: gentle, thinning
+    pad_chord(t61, 4, vel=40)
+    pad_chord(t61 + 4 * MEASURE, 4, vel=32)
+    pad_chord(t61 + 8 * MEASURE, 4, vel=25)
+
+    # Lead: one final augmented subject, then fading statements
+    lead.go(t61)
+    lead.subj(74, SUBJ, R_AUG, vel=70)
+    # Small echo at end
+    lead.go(t61 + 8 * MEASURE)
+    lead.subj(62, SUBJ, R_BASIC, vel=50)
+
+    # Pluck: continues but fading — fewer repetitions, lower velocity
+    pluck.go(t61)
+    for i in range(4):
+        pluck.subj(74 - i * 3, SUBJ, R_PLUCK, vel=60 - i * 8)
+    # One last cascade, very quiet
+    pluck.r(2 * MEASURE)
+    for i in range(3):
+        pluck.subj(69 - i * 4, INV, R_PLUCK, vel=40 - i * 5)
+
+    # Acid: fading subject statements
+    acid.go(t61)
+    acid.subj(50, SUBJ, R_SHORT, vel=60)
+    acid.subj(57, INV, R_DOTTED, vel=50)
+    acid.r(2 * MEASURE)
+    acid.subj(50, SUBJ, R_BASIC, vel=40)
+
+    # Arp: slowing down — back to sixteenths, fading
+    for bar in range(60, 68):
+        fade = 1.0 - (bar - 60) / 8
+        arp_bar(bar * MEASURE, dur=SIXTEENTH, vel=int(45 * fade))
+
+    # Supersaw: drops out after one last statement
+    ssaw.go(t61)
+    ssaw.subj(62, SUBJ, R_BASIC, vel=50)
+
+    # Drums: thinning
+    for bar in range(60, 68):
+        fade = 1.0 - (bar - 60) / 8
+        kick_bar(bar * MEASURE, vel=int(60 * fade), pattern='half')
+        if bar < 64:
+            hihat_bar(bar * MEASURE, vel=int(35 * fade), density='quarter')
+        if bar < 62:
+            clap_bar(bar * MEASURE, vel=int(40 * fade))
+
+    # Sub: fading
+    for bar in range(60, 68):
+        fade = 1.0 - (bar - 60) / 8
+        sub_bar(bar * MEASURE, dur=WHOLE, vel=int(65 * fade))
+
+    # ════════════════════════════════════════════════
+    # G: CODA (m73-80) — Pad + Lead, dissolving
+    # ════════════════════════════════════════════════
+    t73 = 72 * MEASURE
+
+    # Pad: final Dm, slowly fading
     for p in chord_pitches(2, 'm', 55):
-        pad.notes.append((t97, p, 8 * MEASURE, 35))
+        pad.notes.append((t73, p, 8 * MEASURE, 30))
     for p in chord_pitches(2, 'm', 67):
-        pad.notes.append((t97, p, 8 * MEASURE, 25))
+        pad.notes.append((t73, p, 8 * MEASURE, 20))
 
-    # Kick fading out
-    for bar in range(96, 104):
-        fade = 1.0 - (bar - 96) / 8
-        kick.go(bar * MEASURE)
-        kick.n(36, EIGHTH, int(80 * fade))
-        kick.go(bar * MEASURE + 2 * QUARTER)
-        kick.n(36, EIGHTH, int(60 * fade))
+    # Lead: subject one last time, very slow and quiet
+    lead.go(t73 + MEASURE)
+    lead.subj(62, SUBJ, R_AUG, vel=45)
 
-    # Hi-hat fading
-    for bar in range(96, 100):
-        for beat in range(4):
-            hihat.go(bar * MEASURE + beat * QUARTER)
-            hihat.n(80, QUARTER, int(40 * (1 - (bar - 96) / 4)))
+    # Sub: final D pedal
+    sub.go(t73)
+    sub.n(38, 4 * MEASURE, 45)
+    sub.n(26, 4 * MEASURE, 30)  # sub octave, dying away
 
-    # Sub: final D
-    sub.go(t97)
-    sub.n(38, 4 * MEASURE, 60)
-    sub.n(26, 4 * MEASURE, 40)  # sub octave
-
-    # Acid: last whisper of the subject
-    acid.go(t97 + 2 * MEASURE)
-    acid.subj(50, SUBJ, R_BASIC, vel=45)
+    # Acid: ghost of the subject
+    acid.go(t73 + 2 * MEASURE)
+    acid.subj(50, SUBJ, R_BASIC, vel=30)
 
     return [lead, pad, arp, sub, pluck, stab, hihat, kick, clap, fx, acid, ssaw]
 
