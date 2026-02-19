@@ -510,123 +510,190 @@ def compose():
         sub_bar(bar * MEASURE, dur=HALF, vel=75)
 
     # ════════════════════════════════════════════════
-    # E: DENSITY (m45-64) — STRETTO (1-bar gap), AUGMENTATION, BACH motif
-    # Maximum melodic layering. Circle of fifths repeats.
+    # E: DENSITY (m45-64) — STRETTO, AUGMENTATION, BACH motif, TUTTI
+    # Melodic layering with controlled density. Circle of fifths repeats.
+    # m57-60: TUTTI — all 12 voices play subject in octaves (solid color moment!)
     # ════════════════════════════════════════════════
     t45 = 44 * MEASURE
+    t_tutti = t45 + 12 * MEASURE  # m57 — the big tutti moment
 
-    # Pad: thick sustained chords
-    for group_start in range(44, 64, 4):
+    # Pad: sustained chords (fewer octaves = less mud)
+    for group_start in range(44, 56, 4):
         tick = group_start * MEASURE
         rpc, qual = harm(tick)
-        for octave_base in [43, 55, 67, 79]:
+        for octave_base in [55, 67]:
             for p in chord_pitches(rpc, qual, octave_base):
-                pad.notes.append((tick, p, 4 * MEASURE, 38))
+                pad.notes.append((tick, p, 4 * MEASURE, 35))
 
     # Lead: TIGHT STRETTO — 1-bar gap between entries!
     lead.go(t45)
-    lead.subj(74, SUBJ, R_DRIVE, vel=85)
+    lead.subj(74, SUBJ, R_DRIVE, vel=82)
     # Stretto: next entry just 1 bar later
     lead.go(t45 + MEASURE)
-    lead.subj(81, INV, R_DRIVE, vel=80)
+    lead.subj(81, INV, R_DRIVE, vel=78)
     # Counter-stretto
     lead.go(t45 + 2 * MEASURE)
-    lead.subj(69, ANS, R_DRIVE, vel=82)
-    lead.countersubj(71, R_CS, vel=70)
+    lead.subj(69, ANS, R_DRIVE, vel=80)
+    lead.countersubj(71, R_CS, vel=65)
     # BACH motif woven in at climax (m49-50)
     lead.go(t45 + 4 * MEASURE)
-    lead.bach_motif(70, QUARTER, vel=85)  # Bb-A-C-B♮
+    lead.bach_motif(70, QUARTER, vel=82)  # Bb-A-C-B♮
     lead.r(HALF)
-    lead.bach_motif(82, QUARTER, vel=82)  # higher octave
+    lead.bach_motif(82, QUARTER, vel=78)  # higher octave
     # More stretto
     lead.r(MEASURE)
-    lead.subj(74, SUBJ, R_SHORT, vel=80)
+    lead.subj(74, SUBJ, R_SHORT, vel=76)
     # 1-bar gap stretto again
     lead.go(t45 + 8 * MEASURE)
-    lead.subj(81, SUBJ, R_DRIVE, vel=78)
+    lead.subj(81, SUBJ, R_DRIVE, vel=75)
     lead.go(t45 + 9 * MEASURE)
-    lead.subj(69, INV_ANS, R_DRIVE, vel=75)
-    # Final stretto pair
-    lead.go(t45 + 12 * MEASURE)
-    lead.subj(74, SUBJ, R_DRIVE, vel=80)
-    lead.countersubj(76, R_CS, vel=68)
-    lead.go(t45 + 13 * MEASURE)
-    lead.subj(81, ANS, R_SHORT, vel=78)
-    # BACH at climax peak
-    lead.go(t45 + 16 * MEASURE)
-    lead.bach_motif(70, HALF, vel=80)
-    lead.r(QUARTER)
-    lead.subj(62, SUBJ, R_BASIC, vel=75)
+    lead.subj(69, INV_ANS, R_DRIVE, vel=72)
 
-    # Pluck: MAXIMUM — rapid cascading with diminution
+    # Pluck: cascading but fewer rounds (less clutter)
     pluck.go(t45)
-    # Long cascade descending in diminution
-    for i in range(8):
-        pluck.subj_diminution(79 - i * 3, SUBJ, R_PLUCK, vel=72)
-    # Ascending cascade with inversions in diminution
+    # Cascade 1: diminution descending (6 rounds, not 8)
     for i in range(6):
-        pluck.subj_diminution(57 + i * 4, INV, R_PLUCK, vel=68)
-    # Interleaved subject/answer
-    for i in range(6):
-        form = SUBJ if i % 2 == 0 else ANS
-        pluck.subj(74 - i * 2, form, R_PLUCK, vel=70 + i)
+        pluck.subj_diminution(79 - i * 3, SUBJ, R_PLUCK, vel=65)
+    # Ascending cascade with inversions
+    pluck.r(MEASURE)
+    for i in range(4):
+        pluck.subj_diminution(62 + i * 4, INV, R_PLUCK, vel=62)
     # BACH motif as rapid pluck ornament
     pluck.r(HALF)
-    for octave in range(4):
-        pluck.bach_motif(62 + octave * 12, SIXTEENTH, vel=65)
+    for octave in range(3):
+        pluck.bach_motif(62 + octave * 12, SIXTEENTH, vel=60)
         pluck.r(EIGHTH)
 
-    # Acid: relentless cycling + BACH motif + countersubject
+    # Acid: cycling but with fewer countersubjects (less density)
     acid.go(t45)
-    for rep in range(8):
+    for rep in range(6):
         form = [SUBJ, INV, ANS, INV_ANS][rep % 4]
         start_p = 50 + (rep % 3) * 3
-        acid.subj(start_p, form, R_SHORT, vel=72 + rep * 2)
-        # Every 3rd repetition, add countersubject
-        if rep % 3 == 2:
-            acid.countersubj(start_p + 2, [SIXTEENTH]*10, vel=58)
+        acid.subj(start_p, form, R_SHORT, vel=68 + rep)
     # BACH motif in acid register
-    acid.bach_motif(46, EIGHTH, vel=70)  # low register
+    acid.bach_motif(46, EIGHTH, vel=65)
     acid.r(QUARTER)
-    acid.bach_motif(58, EIGHTH, vel=72)  # mid register
-    # Continue cycling
-    for rep in range(4):
-        form = [SUBJ, INV, ANS, INV_ANS][rep % 4]
-        acid.subj(50 + rep * 2, form, R_SHORT, vel=78 + rep)
+    acid.bach_motif(58, EIGHTH, vel=68)
 
     # Supersaw: AUGMENTED subject — majestic, slow
     ssaw.go(t45)
-    ssaw.subj_augmentation(74, SUBJ, R_DRIVE, vel=70)
+    ssaw.subj_augmentation(74, SUBJ, R_DRIVE, vel=60)
     # Second entry in inversion
     ssaw.go(t45 + 8 * MEASURE)
-    ssaw.subj_augmentation(69, INV, R_DRIVE, vel=68)
-    # BACH motif in supersaw — powerful
-    ssaw.go(t45 + 16 * MEASURE)
-    ssaw.bach_motif(70, WHOLE, vel=65)
+    ssaw.subj_augmentation(69, INV, R_DRIVE, vel=58)
 
-    # Stab: denser — every bar now
-    for bar in range(44, 64):
-        stab_bar(bar * MEASURE, vel=55)
+    # Stab: every other bar (not every bar)
+    for bar in range(44, 56):
+        if bar % 2 == 0:
+            stab_bar(bar * MEASURE, vel=45)
 
-    # Arp: thirty-second notes for maximum shimmer
-    for bar in range(44, 64):
-        arp_bar(bar * MEASURE, dur=THIRTYSECOND, vel=50)
+    # Arp: SIXTEENTHS not thirty-seconds (less ear fatigue)
+    for bar in range(44, 56):
+        arp_bar(bar * MEASURE, dur=SIXTEENTH, vel=42)
 
-    # Full drums
-    for bar in range(44, 64):
-        kick_bar(bar * MEASURE, vel=75, pattern='quarter')
-        hihat_bar(bar * MEASURE, vel=50, density='eighth')
-        clap_bar(bar * MEASURE, vel=60)
+    # Drums: half-note kick (not quarter), lighter
+    for bar in range(44, 56):
+        kick_bar(bar * MEASURE, vel=65, pattern='half')
+        hihat_bar(bar * MEASURE, vel=38, density='quarter')
+        if bar % 2 == 0:
+            clap_bar(bar * MEASURE, vel=48)
 
-    # Sub: following harmony
-    for bar in range(44, 64):
-        sub_bar(bar * MEASURE, dur=QUARTER, vel=80)
+    # Sub: HALF notes (not quarter — less sub pulsing)
+    for bar in range(44, 56):
+        sub_bar(bar * MEASURE, dur=HALF, vel=72)
 
-    # FX: textural sweep at peak
-    fx.go(t45 + 8 * MEASURE)  # m53
-    for i in range(32):
-        p = 50 + (i * 30) // 32
-        fx.n(p, SIXTEENTH, 25 + i * 2)
+    # FX: textural sweep m53-56
+    fx.go(t45 + 8 * MEASURE)
+    for i in range(16):
+        p = 50 + (i * 25) // 16
+        fx.n(p, EIGHTH, 22 + i * 2)
+
+    # ── TUTTI (m57-60) — ALL 12 VOICES PLAY SUBJECT IN OCTAVES ──
+    # This creates the "all solid color" moment across every lane.
+    # Each voice plays the subject at its natural register.
+    tutti_vel = 75
+    R_TUTTI = [HALF, HALF, HALF, HALF, HALF, QUARTER, QUARTER, HALF]
+
+    # Melodic voices: subject in different octaves
+    lead.go(t_tutti)
+    lead.subj(74, SUBJ, R_TUTTI, vel=tutti_vel)     # D5 range
+
+    pad.go(t_tutti)
+    # Pad plays subject as sustained notes instead of chords
+    p = 62  # D4
+    pad.n(p, R_TUTTI[0], tutti_vel - 10)
+    for idx, iv in enumerate(SUBJ):
+        p += iv
+        pad.n(p, R_TUTTI[min(idx+1, len(R_TUTTI)-1)], tutti_vel - 10)
+
+    arp.go(t_tutti)
+    arp.subj(86, SUBJ, R_TUTTI, vel=tutti_vel - 8)  # D6 range
+
+    sub.go(t_tutti)
+    sub.subj(38, SUBJ, R_TUTTI, vel=tutti_vel - 5)  # D2 range
+
+    pluck.go(t_tutti)
+    pluck.subj(74, SUBJ, R_PLUCK, vel=tutti_vel)    # rapid version
+    pluck.subj(69, ANS, R_PLUCK, vel=tutti_vel - 5)
+    pluck.subj(74, SUBJ, R_PLUCK, vel=tutti_vel)
+    pluck.subj(81, SUBJ, R_PLUCK, vel=tutti_vel - 5)
+
+    stab.go(t_tutti)
+    # Stab plays short chord stabs on subject pitches
+    p = 62
+    stab.n(p, QUARTER, tutti_vel - 15)
+    for idx, iv in enumerate(SUBJ):
+        p += iv
+        stab.n(p, QUARTER, tutti_vel - 15)
+
+    hihat.go(t_tutti)
+    # Hi-hat: steady eighths for 4 bars
+    for _ in range(32):
+        hihat.n(80, EIGHTH, tutti_vel - 30)
+
+    kick.go(t_tutti)
+    # Kick: on each subject note arrival
+    kick.n(36, QUARTER, tutti_vel - 10)
+    for _ in range(7):
+        kick.r(HALF - QUARTER)
+        kick.n(36, QUARTER, tutti_vel - 15)
+
+    clap.go(t_tutti + 2 * QUARTER)
+    # Clap: beat 3 of each bar
+    for bar in range(4):
+        clap.n(74, EIGHTH, tutti_vel - 20)
+        clap.r(MEASURE - EIGHTH)
+
+    fx.go(t_tutti)
+    fx.subj(62, SUBJ, R_TUTTI, vel=tutti_vel - 25)  # ghost of subject
+
+    acid.go(t_tutti)
+    acid.subj(50, SUBJ, R_TUTTI, vel=tutti_vel - 5)  # low subject
+
+    ssaw.go(t_tutti)
+    ssaw.subj(62, SUBJ, R_TUTTI, vel=tutti_vel - 8)  # thick subject
+
+    # ── Post-tutti (m61-64): brief afterglow, winding down ──
+    t61 = t_tutti + 4 * MEASURE
+
+    # Pad returns to chords
+    pad_chord(t61, 4, vel=35)
+
+    # Lead: BACH at climax peak, then one more subject
+    lead.go(t61)
+    lead.bach_motif(70, HALF, vel=75)
+    lead.r(QUARTER)
+    lead.subj(62, SUBJ, R_BASIC, vel=70)
+
+    # Supersaw: BACH motif — powerful
+    ssaw.go(t61)
+    ssaw.bach_motif(70, WHOLE, vel=60)
+
+    # Lighter texture
+    for bar in range(60, 64):
+        arp_bar(bar * MEASURE, dur=SIXTEENTH, vel=35)
+        kick_bar(bar * MEASURE, vel=55, pattern='half')
+        sub_bar(bar * MEASURE, dur=HALF, vel=65)
 
     # ════════════════════════════════════════════════
     # F: THINNING (m65-76) — Voices drop out gradually
