@@ -42,6 +42,7 @@ PIECES = {
     11: {'midi': 'kunst_der_fuge_xi_mutopia.mid',       'output': 'notes_11.json',  'title': 'Contrapunctus XI',   'number': 'XI',   'voices': VOICES_4},
     12: {'midi': 'kunst_der_fuge_xii_mutopia.mid',      'output': 'notes_12.json',  'title': 'Contrapunctus XII',  'number': 'XII',  'voices': VOICES_2},
     13: {'midi': 'kunst_der_fuge_xiv_mutopia.mid',      'output': 'notes_14.json',  'title': 'Contrapunctus XIV',  'number': 'XIV',  'voices': VOICES_2},
+    14: {'midi': 'contrapunctus_xv.mid',                'output': 'notes_15.json',  'title': 'Contrapunctus XV',   'number': 'XV*',  'voices': VOICES_4},
 }
 
 # ── Subject interval patterns ──

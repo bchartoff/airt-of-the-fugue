@@ -234,6 +234,49 @@ function getNoteColor(note, voiceNotes, noteIdx) {
   return lerpColor(FUZZY_COLOR, paletteColor, sim);
 }
 
+// Draw a rectangle with diagonal stripes whose density encodes `frac` (0-1).
+// frac=1 → solid color, frac=0 → solid white, in between → alternating
+// diagonal color/white stripes at 45°.
+function drawStripedRect(ctx, x, y, w, h, color, frac) {
+  if (frac >= 0.97) {
+    // Essentially solid
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w, h);
+    return;
+  }
+  // White background first
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y, w, h);
+
+  if (frac <= 0.03) return; // fully white
+
+  // Stripe geometry: fixed period, vary the colored-stripe width.
+  // Period = 6px (diagonal), colored portion = frac * period.
+  const period = 6;
+  const colorW = frac * period;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+
+  ctx.fillStyle = color;
+  // Draw 45° stripes: sweep from top-left to bottom-right.
+  // Each stripe is a parallelogram. We need enough to cover the rect.
+  const span = w + h; // diagonal span to cover
+  for (let d = -h; d < span; d += period) {
+    ctx.beginPath();
+    ctx.moveTo(x + d, y);
+    ctx.lineTo(x + d + colorW, y);
+    ctx.lineTo(x + d + colorW - h, y + h);
+    ctx.lineTo(x + d - h, y + h);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 function drawFrame(t) {
   const scrollX = getScrollX(t);
 
@@ -257,38 +300,54 @@ function drawLane(lane, t, scrollX) {
   const noteColors = notes.map((n, i) => getNoteColor(n, notes, i));
   const isFuzzy = notes.map(n => !n.motif);
 
-  // Background — tinted by active note if it's a tagged note
-  let bgColor = '#ffffff';
+  // Background — tinted by active note.
+  // Tagged notes: solid color fill. Fuzzy notes: diagonal stripes at similarity density.
   let activeNote = null;
   let activeNoteIdx = -1;
+  let bgTaggedColor = null;
+  let bgFuzzyColor = null;
+  let bgFuzzySim = 0;
   for (let i = 0; i < notes.length; i++) {
     const n = notes[i];
     if (activeNoteIndices.has(n._globalIdx)) {
       if (!isFuzzy[i]) {
-        bgColor = hexToRgba(noteColors[i], 1.0);
+        bgTaggedColor = noteColors[i];
+      } else if (!bgTaggedColor) {
+        bgFuzzyColor = noteColors[i];
+        bgFuzzySim = n.similarity != null ? n.similarity : 0;
       }
       if (!activeNote) { activeNote = n; activeNoteIdx = i; }
     }
   }
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(scrollX, 0, w, h);
+  if (bgTaggedColor) {
+    ctx.fillStyle = bgTaggedColor;
+    ctx.fillRect(scrollX, 0, w, h);
+  } else if (bgFuzzyColor) {
+    drawStripedRect(ctx, scrollX, 0, w, h, bgFuzzyColor, bgFuzzySim);
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(scrollX, 0, w, h);
+  }
 
   // Grid
   drawLaneGrid(lane, scrollX);
 
   // Notes — pass 1: all notes
-  // Tagged notes: full opaque color. Fuzzy/grey notes: muted alpha.
+  // Tagged notes: solid opaque color.
+  // Untagged (fuzzy) notes: diagonal stripes where density = similarity score.
   for (let i = 0; i < notes.length; i++) {
     const n = notes[i];
     const r = noteRectInLane(n, lane);
     if (r.x + r.w < scrollX || r.x > scrollX + w) continue;
 
     const color = noteColors[i];
-    // Tagged notes: bold. Untagged: alpha scales with similarity (0.22 → 0.65).
-    const sim = n.similarity != null ? n.similarity : 0;
-    const alpha = isFuzzy[i] ? (0.22 + 0.43 * sim) : 0.85;
-    ctx.fillStyle = hexToRgba(color, alpha);
-    ctx.fillRect(r.x, r.y, r.w, r.h);
+    if (isFuzzy[i]) {
+      const sim = n.similarity != null ? n.similarity : 0;
+      drawStripedRect(ctx, r.x, r.y, r.w, r.h, color, sim);
+    } else {
+      ctx.fillStyle = hexToRgba(color, 0.85);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
   }
 
   // Notes — pass 2: active notes with glow (only tagged notes get full glow)
@@ -301,10 +360,14 @@ function drawLane(lane, t, scrollX) {
     if (!isFuzzy[i]) {
       ctx.shadowColor = color;
       ctx.shadowBlur = 10;
+      ctx.fillStyle = hexToRgba(color, 1.0);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.shadowBlur = 0;
+    } else {
+      // Active fuzzy note: boost stripe density slightly
+      const sim = Math.min(1, (n.similarity != null ? n.similarity : 0) + 0.15);
+      drawStripedRect(ctx, r.x, r.y, r.w, r.h, color, sim);
     }
-    ctx.fillStyle = hexToRgba(color, isFuzzy[i] ? 0.35 : 1.0);
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.shadowBlur = 0;
   }
 
   // ── Measure number labels ──
