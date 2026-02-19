@@ -23,6 +23,12 @@ const SUBJECT_COLORS = [
 
 const FUZZY_COLOR = '#999999'; // grey for untagged / fuzzy-only notes
 
+// BACH motif colors (Bb-A-C-B♮ = blue/teal family, distinct from warm subject palette)
+const BACH_COLORS = ['#0077B6', '#00B4D8', '#90E0EF', '#0077B6']; // 4-note motif
+// Enigmatic subject colors (Contrapunctus X — purple/violet family)
+const ENIGMATIC_COLORS = ['#7209B7', '#560BAD', '#480CA8', '#3A0CA3', '#3F37C9', '#4361EE']; // 6-note paired
+const ENIGMATIC_CELL_COLORS = ['#7209B7', '#560BAD', '#480CA8']; // 3-note single cell
+
 // Parse a hex color to [r,g,b] 0-255
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -248,6 +254,19 @@ function noteRectInLane(note, lane) {
 function getMotifColor(note) {
   if (!note.motif) return null;
   const pos = note.motif_pos >= 0 ? note.motif_pos : (note.best_pos ?? 0);
+
+  // BACH motif: blue/teal palette
+  if (note.motif === 'bach' || note.motif === 'bach_transposed') {
+    return BACH_COLORS[Math.min(pos, 3)];
+  }
+  // Enigmatic subject: purple palette
+  if (note.motif === 'enigmatic') {
+    return ENIGMATIC_COLORS[Math.min(pos, 5)];
+  }
+  if (note.motif === 'enigmatic_cell') {
+    return ENIGMATIC_CELL_COLORS[Math.min(pos, 2)];
+  }
+
   return SUBJECT_COLORS[Math.min(pos, 7)];
 }
 
@@ -452,6 +471,14 @@ function getNoteMotifLabel(note) {
     return { prefix: '↗', label: `head  ${pos + 1}/5` };
   } else if (m === 'head_inv') {
     return { prefix: '↙', label: `inv. head  ${pos + 1}/5` };
+  } else if (m === 'bach') {
+    return { prefix: '♭', label: `BACH  ${pos + 1}/4` };
+  } else if (m === 'bach_transposed') {
+    return { prefix: '♭', label: `BACH (tr.)  ${pos + 1}/4` };
+  } else if (m === 'enigmatic') {
+    return { prefix: '⬡', label: `enigmatic  ${pos + 1}/6` };
+  } else if (m === 'enigmatic_cell') {
+    return { prefix: '⬡', label: `eni. cell  ${pos + 1}/3` };
   } else {
     return { prefix: '≈', label: `pos ${pos + 1}/8  ${pct}%` };
   }
@@ -557,23 +584,56 @@ function drawSubjectMarkers(lane, scrollX) {
   const { ctx, w, h, notes } = lane;
   const size = Math.max(6, Math.min(10, h * 0.12));
 
+  // Motif types that get entry markers (motif → {color, shape})
+  const MARKER_DEFS = {
+    'subject':          { color: '#800026', shape: 'tri' },
+    'subject_inv':      { color: '#444488', shape: 'tri' },
+    'bach':             { color: '#0077B6', shape: 'diamond' },
+    'bach_transposed':  { color: '#00B4D8', shape: 'diamond' },
+    'enigmatic':        { color: '#7209B7', shape: 'hex' },
+  };
+
   for (const n of notes) {
-    if ((n.motif !== 'subject' && n.motif !== 'subject_inv') || n.motif_pos !== 0) continue;
+    if (n.motif_pos !== 0) continue;
+    const def = MARKER_DEFS[n.motif];
+    if (!def) continue;
     const x = n.start * pxPerSec;
     if (x < scrollX - size || x > scrollX + w + size) continue;
-
-    const color = n.motif === 'subject_inv' ? '#444488' : '#800026';
 
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
     ctx.shadowBlur = 3;
-    ctx.fillStyle = color;
-    // Downward-pointing triangle at top of lane
-    ctx.beginPath();
-    ctx.moveTo(x - size / 2, 0);
-    ctx.lineTo(x + size / 2, 0);
-    ctx.lineTo(x, size);
-    ctx.closePath();
+    ctx.fillStyle = def.color;
+
+    if (def.shape === 'tri') {
+      // Downward-pointing triangle at top of lane
+      ctx.beginPath();
+      ctx.moveTo(x - size / 2, 0);
+      ctx.lineTo(x + size / 2, 0);
+      ctx.lineTo(x, size);
+      ctx.closePath();
+    } else if (def.shape === 'diamond') {
+      // Diamond shape
+      const s2 = size * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + s2, size / 2);
+      ctx.lineTo(x, size);
+      ctx.lineTo(x - s2, size / 2);
+      ctx.closePath();
+    } else if (def.shape === 'hex') {
+      // Small hexagon
+      const r = size * 0.5;
+      ctx.beginPath();
+      for (let a = 0; a < 6; a++) {
+        const angle = Math.PI / 6 + a * Math.PI / 3;
+        const px = x + r * Math.cos(angle);
+        const py = size / 2 + r * Math.sin(angle);
+        if (a === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    }
     ctx.fill();
     ctx.restore();
   }
@@ -827,6 +887,14 @@ function showTooltip(clientX, clientY, note) {
     motifLine = `\u2197 Head fragment note ${note.motif_pos + 1}/5<br>`;
   } else if (m === 'head_inv') {
     motifLine = `\u2199 Inv. head fragment note ${note.motif_pos + 1}/5<br>`;
+  } else if (m === 'bach') {
+    motifLine = `\u266D BACH motif (B\u266D-A-C-B\u266E) note ${note.motif_pos + 1}/4<br>`;
+  } else if (m === 'bach_transposed') {
+    motifLine = `\u266D BACH motif (transposed) note ${note.motif_pos + 1}/4<br>`;
+  } else if (m === 'enigmatic') {
+    motifLine = `\u2B21 Enigmatic subject note ${note.motif_pos + 1}/6<br>`;
+  } else if (m === 'enigmatic_cell') {
+    motifLine = `\u2B21 Enigmatic cell note ${note.motif_pos + 1}/3<br>`;
   } else if (note.best_pos != null) {
     const sim = note.similarity != null ? note.similarity : 0;
     const pct = Math.round(sim * 100);
@@ -860,13 +928,17 @@ const SUBJECT_NOTES_ANS  = ['A', 'D', 'C', 'A', 'G#', 'A', 'B', 'C'];
 const SUBJECT_INTERVALS_DISPLAY = ['+7 (P5↑)', '−4 (M3↓)', '−3 (m3↓)', '−1 (m2↓)', '+1 (m2↑)', '+2 (M2↑)', '+1 (m2↑)'];
 const ANSWER_INTERVALS_DISPLAY  = ['+5 (P4↑)', '−2 (M2↓)', '−3 (m3↓)', '−1 (m2↓)', '+1 (m2↑)', '+2 (M2↑)', '+1 (m2↑)'];
 const MOTIF_NAMES = {
-  subject:     { icon: '★', label: 'Subject / answer entry',      desc: 'Exact 8-note interval match: +7,−4,−3,−1,+1,+2,+1 (rectus) or +5,−2,−3,−1,+1,+2,+1 (answer). Transposition-invariant — caught at any pitch level.' },
-  subject_inv: { icon: '☆', label: 'Inverted subject entry',      desc: 'Subject played upside-down: −7,+4,+3,+1,−1,−2,−1 (inv. rectus) or −5,+2,+3,+1,−1,−2,−1 (inv. answer). Transposition-invariant.' },
-  tail:        { icon: '~', label: 'Tail fragment',                desc: 'Last 5 notes of subject (intervals: −1,+1,+2,+1). Tagged only when no full-subject overlap exists.' },
-  tail_inv:    { icon: '↕', label: 'Inverted tail fragment',      desc: 'Tail played upside-down (intervals: +1,−1,−2,−1). Classic stretto and augmentation device.' },
-  head:        { icon: '↗', label: 'Head fragment',               desc: 'First 5 notes of subject (+7,−4,−3,−1) or answer (+5,−2,−3,−1). Transposition-invariant.' },
-  head_inv:    { icon: '↙', label: 'Inverted head fragment',      desc: 'Head played upside-down (−7,+4,+3,+1 or −5,+2,+3,+1). Transposition-invariant.' },
-  '':          { icon: '≈', label: 'Fuzzy match only',            desc: 'Not part of any recognized motif. Color and opacity driven purely by similarity score from local interval context.' },
+  subject:          { icon: '★', label: 'Subject / answer entry',      desc: 'Exact 8-note interval match: +7,−4,−3,−1,+1,+2,+1 (rectus) or +5,−2,−3,−1,+1,+2,+1 (answer). Transposition-invariant — caught at any pitch level.' },
+  subject_inv:      { icon: '☆', label: 'Inverted subject entry',      desc: 'Subject played upside-down: −7,+4,+3,+1,−1,−2,−1 (inv. rectus) or −5,+2,+3,+1,−1,−2,−1 (inv. answer). Transposition-invariant.' },
+  tail:             { icon: '~', label: 'Tail fragment',                desc: 'Last 5 notes of subject (intervals: −1,+1,+2,+1). Tagged only when no full-subject overlap exists.' },
+  tail_inv:         { icon: '↕', label: 'Inverted tail fragment',      desc: 'Tail played upside-down (intervals: +1,−1,−2,−1). Classic stretto and augmentation device.' },
+  head:             { icon: '↗', label: 'Head fragment',               desc: 'First 5 notes of subject (+7,−4,−3,−1) or answer (+5,−2,−3,−1). Transposition-invariant.' },
+  head_inv:         { icon: '↙', label: 'Inverted head fragment',      desc: 'Head played upside-down (−7,+4,+3,+1 or −5,+2,+3,+1). Transposition-invariant.' },
+  bach:             { icon: '♭', label: 'BACH motif (exact)',           desc: 'B♭-A-C-B♮ at original pitch class. Bach\'s musical signature — intervals [−1,+3,−1]. One of music\'s most famous ciphers.' },
+  bach_transposed:  { icon: '♭', label: 'BACH motif (transposed)',     desc: 'Same interval shape [−1,+3,−1] but starting on a different pitch class. A transposed echo of Bach\'s signature.' },
+  enigmatic:        { icon: '⬡', label: 'Enigmatic subject (paired)',  desc: 'Contrapunctus X\'s mysterious opening: two 3-note cells (chromatic step + P4 leap), separated by a ~m6 gap. Form 1: [+1,−5,gap,−1,+5]. Form 2 is retrograde.' },
+  enigmatic_cell:   { icon: '⬡', label: 'Enigmatic cell (single)',     desc: 'A single 3-note cell from C X\'s enigmatic subject: [+1,−5] (chromatic step up + P4 down) or [−1,+5] (chromatic step down + P4 up).' },
+  '':               { icon: '≈', label: 'Fuzzy match only',            desc: 'Not part of any recognized motif. Color and opacity driven purely by similarity score from local interval context.' },
 };
 
 const INTERVAL_NAMES = {
@@ -954,6 +1026,27 @@ function buildNoteInfoHtml(note, voiceName, voiceColor) {
       html += field('Inv. subject form', `−7, +4, +3, +1`);
       html += field('Inv. answer form',  `−5, +2, +3, +1`);
     }
+  } else if (motif === 'bach' || motif === 'bach_transposed') {
+    html += sep();
+    html += field('Position in BACH', `${note.motif_pos + 1} / 4`);
+    html += field('Intervals', `−1 (m2↓), +3 (m3↑), −1 (m2↓)`);
+    html += field('Canonical pitches', `B♭ — A — C — B♮`);
+    html += field('Pitch class match', motif === 'bach' ? '<strong style="color:#0077B6">✓ Exact</strong>' : 'Transposed');
+    html += field('Matched at pitch', pitchName(note.pitch));
+  } else if (motif === 'enigmatic') {
+    html += sep();
+    html += field('Position in enigmatic', `${note.motif_pos + 1} / 6`);
+    const cellNum = note.motif_pos < 3 ? '1' : '2';
+    const cellPos = (note.motif_pos % 3) + 1;
+    html += field('Cell', `${cellNum} (note ${cellPos}/3)`);
+    html += field('Structure', 'chromatic step → P4 leap');
+    html += field('Form', 'Two 3-note cells separated by ~m6 gap');
+    html += field('Source', 'Contrapunctus X opening subject');
+  } else if (motif === 'enigmatic_cell') {
+    html += sep();
+    html += field('Position in cell', `${note.motif_pos + 1} / 3`);
+    html += field('Structure', 'chromatic step → P4 leap');
+    html += field('Note', 'Unpaired cell (no matching partner)');
   }
 
   html += sep();

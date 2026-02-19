@@ -151,6 +151,27 @@ SUBJECT_PATTERNS = [
 TAIL_INTERVALS = [-1, 1, 2, 1]
 TAIL_INV       = [1, -1, -2, -1]   # inversion of tail
 
+# ── BACH motif (Bb-A-C-B♮) ──
+# Intervals: [-1, +3, -1] (semitone down, minor 3rd up, semitone down)
+# 4 notes, appears across many contrapunctuses (10 total occurrences).
+# Exact pitch class: Bb=10, A=9, C=0, B=11 (pitch % 12).
+# We tag all transpositions; exact Bb-A-C-B gets a special flag.
+BACH_INTERVALS = [-1, 3, -1]
+BACH_PITCH_CLASSES = [10, 9, 0, 11]  # Bb, A, C, B♮
+
+# ── Contrapunctus X "Enigmatic Subject" ──
+# Two 3-note cells, each: chromatic approach → target → perfect 4th leap.
+# Cell type A: [+1, -5] (semitone up, P4 down)
+# Cell type B: [-1, +5] (semitone down, P4 up)
+# Full subject (Form 1): cell A + gap + cell B → [+1, -5, +8, -1, +5]
+# Full subject (Form 2): cell B + gap + cell A → [-1, +5, -8, +1, -5] (retrograde)
+# The gap is typically ±8 (minor 6th) but may range ±6 to ±9.
+ENIGMATIC_CELL_A = [1, -5]    # semitone up, P4 down
+ENIGMATIC_CELL_B = [-1, 5]    # semitone down, P4 up
+# Also accept tritone (±6) and P5 (±7) leaps as variant cells
+ENIGMATIC_CELL_A_VARIANTS = [[1, -5], [1, -6], [1, -7]]
+ENIGMATIC_CELL_B_VARIANTS = [[-1, 5], [-1, 6], [-1, 7]]
+
 # Tail B = last 5 notes of Form B subject: D C# D E (F) — same tail as Form A
 # (the ornamented form converges to the same tail)
 
@@ -354,7 +375,60 @@ def tag_motifs(notes_by_voice):
                             voice_notes[i + pos]['motif'] = 'head_inv'
                             voice_notes[i + pos]['motif_pos'] = pos
 
-        # ── Pass 5: Fuzzy similarity scoring for ALL notes ──
+        # ── Pass 5: BACH motif (4 notes, intervals [-1, +3, -1]) ──
+        # Tags as 'bach' (exact Bb-A-C-B pitch class) or 'bach_transposed'.
+        # Only tags notes not already claimed by a higher-priority motif.
+        for i in range(count - 3):
+            seg = [voice_notes[i + j]['pitch'] for j in range(4)]
+            seg_int = [seg[j + 1] - seg[j] for j in range(3)]
+            if seg_int == BACH_INTERVALS:
+                if all(voice_notes[i + j]['motif'] == '' for j in range(4)):
+                    pcs = [seg[j] % 12 for j in range(4)]
+                    is_exact = (pcs == BACH_PITCH_CLASSES)
+                    label = 'bach' if is_exact else 'bach_transposed'
+                    for pos in range(4):
+                        voice_notes[i + pos]['motif'] = label
+                        voice_notes[i + pos]['motif_pos'] = pos
+
+        # ── Pass 5b: Contrapunctus X enigmatic subject ──
+        # Detect paired cells: [+1,-5,gap,-1,+5] or [-1,+5,gap,+1,-5]
+        # where gap is ±6 to ±9 (minor 6th to major 6th range).
+        # Also detect single cells [+1,-5] or [-1,+5] standalone.
+        #
+        # Paired cells (6 notes = 5 intervals):
+        for i in range(count - 5):
+            seg = [voice_notes[i + j]['pitch'] for j in range(6)]
+            seg_int = [seg[j + 1] - seg[j] for j in range(5)]
+            # Check Form 1: cell A + gap + cell B
+            if (seg_int[0:2] in ENIGMATIC_CELL_A_VARIANTS
+                    and 6 <= abs(seg_int[2]) <= 9
+                    and seg_int[3:5] in ENIGMATIC_CELL_B_VARIANTS):
+                if all(voice_notes[i + j]['motif'] == '' for j in range(6)):
+                    for pos in range(6):
+                        voice_notes[i + pos]['motif'] = 'enigmatic'
+                        voice_notes[i + pos]['motif_pos'] = pos
+                    continue
+            # Check Form 2: cell B + gap + cell A
+            if (seg_int[0:2] in ENIGMATIC_CELL_B_VARIANTS
+                    and 6 <= abs(seg_int[2]) <= 9
+                    and seg_int[3:5] in ENIGMATIC_CELL_A_VARIANTS):
+                if all(voice_notes[i + j]['motif'] == '' for j in range(6)):
+                    for pos in range(6):
+                        voice_notes[i + pos]['motif'] = 'enigmatic'
+                        voice_notes[i + pos]['motif_pos'] = pos
+                    continue
+
+        # Single enigmatic cells (3 notes, only if not part of a paired match):
+        for i in range(count - 2):
+            seg = [voice_notes[i + j]['pitch'] for j in range(3)]
+            seg_int = [seg[j + 1] - seg[j] for j in range(2)]
+            if seg_int in ENIGMATIC_CELL_A_VARIANTS or seg_int in ENIGMATIC_CELL_B_VARIANTS:
+                if all(voice_notes[i + j]['motif'] == '' for j in range(3)):
+                    for pos in range(3):
+                        voice_notes[i + pos]['motif'] = 'enigmatic_cell'
+                        voice_notes[i + pos]['motif_pos'] = pos
+
+        # ── Pass 6: Fuzzy similarity scoring for ALL notes ──
         # For each note, compute how well its local interval context
         # matches each of the 8 subject positions.
         #
