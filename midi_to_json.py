@@ -240,6 +240,109 @@ def flexible_match(voice_notes, start_idx, pattern, max_skips=4, min_dur=0.4):
     return matched, skipped
 
 
+def detect_stretto_and_combinations(notes_by_voice):
+    """Post-processing pass: detect stretto entries and subject combinations.
+
+    Stretto = when a new subject entry in one voice begins before the previous
+    entry in another voice has finished. We identify overlapping subject/subject_inv
+    entries across voices.
+
+    Subject combination = when 2+ different motif types sound simultaneously.
+    This is critical for the triple fugues (C VIII, XI) where multiple subjects
+    are combined.
+
+    Adds to each note:
+      stretto: True if this note is part of an overlapping subject entry
+      stretto_voices: number of voices in stretto at this point (0 if not stretto)
+      combination: list of distinct motif types sounding simultaneously across voices
+    """
+    # Collect all subject/subject_inv entry spans: (voice_id, start_time, end_time, motif_type)
+    entries = []
+    for voice_id, vnotes in notes_by_voice.items():
+        i = 0
+        while i < len(vnotes):
+            n = vnotes[i]
+            if n['motif'] in ('subject', 'subject_inv') and n['motif_pos'] == 0:
+                # Found start of an entry — find its end
+                entry_motif = n['motif']
+                start_time = n['start']
+                end_time = n['start'] + n['duration']
+                j = i + 1
+                while j < len(vnotes) and vnotes[j]['motif'] == entry_motif and vnotes[j]['motif_pos'] > 0:
+                    end_time = max(end_time, vnotes[j]['start'] + vnotes[j]['duration'])
+                    j += 1
+                entries.append((voice_id, start_time, end_time, entry_motif))
+                i = j
+            else:
+                i += 1
+
+    # Detect stretto: find overlapping entries in DIFFERENT voices
+    stretto_spans = []  # list of (start, end, voice_count, overlapping_entry_indices)
+    for idx_a, (va, sa, ea, ma) in enumerate(entries):
+        overlapping = [idx_a]
+        for idx_b, (vb, sb, eb, mb) in enumerate(entries):
+            if idx_b == idx_a:
+                continue
+            if va == vb:
+                continue  # same voice doesn't count
+            # Check temporal overlap
+            if sb < ea and sa < eb:
+                overlapping.append(idx_b)
+        if len(overlapping) > 1:
+            # This entry overlaps with at least one other
+            all_starts = [entries[i][1] for i in overlapping]
+            all_ends = [entries[i][2] for i in overlapping]
+            span_start = max(all_starts)  # overlap begins when last entry starts
+            span_end = min(all_ends)      # overlap ends when first entry finishes
+            if span_start < span_end:
+                voices_in_stretto = len(set(entries[i][0] for i in overlapping))
+                stretto_spans.append((span_start, span_end, voices_in_stretto))
+
+    # Mark notes that fall within stretto spans
+    for voice_id, vnotes in notes_by_voice.items():
+        for n in vnotes:
+            n['stretto'] = False
+            n['stretto_voices'] = 0
+            n['combination'] = []
+
+            if n['motif'] in ('subject', 'subject_inv'):
+                note_mid = n['start'] + n['duration'] / 2
+                for (ss, se, sv) in stretto_spans:
+                    if ss <= note_mid <= se:
+                        n['stretto'] = True
+                        n['stretto_voices'] = max(n['stretto_voices'], sv)
+                        break
+
+    # Detect subject combinations: at each moment, what distinct motif types are sounding?
+    # Build time slices from all note boundaries
+    all_notes_flat = []
+    for voice_id, vnotes in notes_by_voice.items():
+        for n in vnotes:
+            if n['motif'] in ('subject', 'subject_inv', 'bach', 'bach_transposed', 'enigmatic'):
+                all_notes_flat.append(n)
+
+    # For each note, find what other motif types are active at its midpoint
+    for voice_id, vnotes in notes_by_voice.items():
+        for n in vnotes:
+            if not n['motif']:
+                continue
+            t_mid = n['start'] + n['duration'] / 2
+            active_motifs = set()
+            for other in all_notes_flat:
+                if other['start'] <= t_mid <= other['start'] + other['duration']:
+                    active_motifs.add(other['motif'])
+            # Normalize: group subject variants
+            combo = set()
+            for m in active_motifs:
+                if m in ('subject', 'subject_inv'):
+                    combo.add('subject_family')
+                elif m in ('bach', 'bach_transposed'):
+                    combo.add('bach_family')
+                else:
+                    combo.add(m)
+            n['combination'] = sorted(combo) if len(combo) > 1 else []
+
+
 def tag_motifs(notes_by_voice):
     """Tag each note with motif info.
 
@@ -633,6 +736,7 @@ def convert_piece(piece_num):
         })
 
     tag_motifs(notes_by_voice)
+    detect_stretto_and_combinations(notes_by_voice)
 
     all_notes = []
     for notes in notes_by_voice.values():
@@ -666,10 +770,17 @@ def convert_piece(piece_num):
 
     from collections import Counter
     motif_counts = Counter(n['motif'] for n in all_notes if n['motif'])
+    stretto_count = sum(1 for n in all_notes if n.get('stretto'))
+    combo_count = sum(1 for n in all_notes if n.get('combination'))
+    max_stretto = max((n.get('stretto_voices', 0) for n in all_notes), default=0)
     print(f"[{piece['title']}] Wrote {len(all_notes)} notes to {output_path}")
     print(f'  Duration: {total_duration:.1f}s, Measures: {total_measures}')
     for m, c in sorted(motif_counts.items()):
         print(f'  {m}: {c} notes')
+    if stretto_count:
+        print(f'  STRETTO: {stretto_count} notes in stretto (max {max_stretto} voices)')
+    if combo_count:
+        print(f'  COMBINATIONS: {combo_count} notes in multi-motif combinations')
     for v in voice_meta:
         print(f"  {v['name']}: {v['note_count']} notes, pitch {v['pitch_min']}–{v['pitch_max']}")
 

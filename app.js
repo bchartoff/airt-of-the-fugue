@@ -22,6 +22,8 @@ const SUBJECT_COLORS = [
 ];
 
 const FUZZY_COLOR = '#999999'; // grey for untagged / fuzzy-only notes
+const STRETTO_OUTLINE_COLOR = '#FFD700'; // gold outline for stretto notes
+const COMBINATION_OUTLINE_COLOR = '#FF1493'; // deep pink for multi-motif combination
 
 // BACH motif colors (Bb-A-C-B♮ = blue/teal family, distinct from warm subject palette)
 const BACH_COLORS = ['#0077B6', '#00B4D8', '#90E0EF', '#0077B6']; // 4-note motif
@@ -430,6 +432,38 @@ function drawLane(lane, t, scrollX) {
     }
   }
 
+  // Notes — pass 3: stretto and combination outlines
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    const r = noteRectInLane(n, lane);
+    if (r.x + r.w < scrollX || r.x > scrollX + w) continue;
+
+    // Stretto outline: gold dashed border
+    if (n.stretto) {
+      ctx.save();
+      ctx.strokeStyle = STRETTO_OUTLINE_COLOR;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 2]);
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    // Combination: deep pink corner marker
+    if (n.combination && n.combination.length > 1) {
+      ctx.save();
+      ctx.fillStyle = COMBINATION_OUTLINE_COLOR;
+      const sz = Math.min(5, r.h * 0.4);
+      // Small triangle in top-right corner
+      ctx.beginPath();
+      ctx.moveTo(r.x + r.w, r.y);
+      ctx.lineTo(r.x + r.w - sz, r.y);
+      ctx.lineTo(r.x + r.w, r.y + sz);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   // ── Measure number labels ──
   drawMeasureLabels(lane, scrollX);
 
@@ -458,11 +492,12 @@ function getNoteMotifLabel(note) {
   const pos = note.motif_pos >= 0 ? note.motif_pos : note.best_pos;
   const sim = note.similarity != null ? note.similarity : 0;
   const pct = Math.round(sim * 100);
+  const strettoSuffix = note.stretto ? '  ✳' : '';
 
   if (m === 'subject') {
-    return { prefix: '★', label: `subject  ${pos + 1}/8` };
+    return { prefix: '★', label: `subject  ${pos + 1}/8${strettoSuffix}` };
   } else if (m === 'subject_inv') {
-    return { prefix: '☆', label: `inv. subject  ${pos + 1}/8` };
+    return { prefix: '☆', label: `inv. subject  ${pos + 1}/8${strettoSuffix}` };
   } else if (m === 'tail') {
     return { prefix: '~', label: `tail  ${pos - 2}/5` };
   } else if (m === 'tail_inv') {
@@ -599,6 +634,14 @@ function drawSubjectMarkers(lane, scrollX) {
     if (!def) continue;
     const x = n.start * pxPerSec;
     if (x < scrollX - size || x > scrollX + w + size) continue;
+
+    // Stretto entry: gold underline beneath the marker
+    if (n.stretto) {
+      ctx.save();
+      ctx.fillStyle = STRETTO_OUTLINE_COLOR;
+      ctx.fillRect(x - size / 2, size + 1, size, 2);
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
@@ -900,6 +943,16 @@ function showTooltip(clientX, clientY, note) {
     const pct = Math.round(sim * 100);
     motifLine = `\u223D Resembles subject pos ${note.best_pos + 1}/8 (${pct}%)<br>`;
   }
+  // Stretto info
+  let strettoLine = '';
+  if (note.stretto) {
+    strettoLine = `<span style="color:${STRETTO_OUTLINE_COLOR}">\u2733</span> STRETTO (${note.stretto_voices} voices overlapping)<br>`;
+  }
+  // Combination info
+  let comboLine = '';
+  if (note.combination && note.combination.length > 1) {
+    comboLine = `<span style="color:${COMBINATION_OUTLINE_COLOR}">\u2726</span> Combined: ${note.combination.join(' + ')}<br>`;
+  }
   const sec = getSectionAt(note.start);
   const sectionLine = sec
     ? `<span style="color:${sec.color}">\u25A0</span> ${sec.label}<br>`
@@ -909,6 +962,8 @@ function showTooltip(clientX, clientY, note) {
     `Note: ${pitchName(note.pitch)} (MIDI ${note.pitch})<br>` +
     `Measure ${note.measure}, beat ${note.beat.toFixed(1)}<br>` +
     motifLine +
+    strettoLine +
+    comboLine +
     sectionLine +
     `Duration: ${note.duration.toFixed(3)}s`;
   tooltip.style.left = (clientX + 12) + 'px';
@@ -940,6 +995,10 @@ const MOTIF_NAMES = {
   enigmatic_cell:   { icon: '⬡', label: 'Enigmatic cell (single)',     desc: 'A single 3-note cell from C X\'s enigmatic subject: [+1,−5] (chromatic step up + P4 down) or [−1,+5] (chromatic step down + P4 up).' },
   '':               { icon: '≈', label: 'Fuzzy match only',            desc: 'Not part of any recognized motif. Color and opacity driven purely by similarity score from local interval context.' },
 };
+
+// Overlay descriptions for stretto and combination
+const STRETTO_DESC = 'A new subject entry begins before the previous entry in another voice has finished. Gold dashed outlines mark overlapping subject notes.';
+const COMBINATION_DESC = 'Multiple distinct motif types (subject, BACH, enigmatic) sounding simultaneously across voices. Pink corner markers show combined moments.';
 
 const INTERVAL_NAMES = {
   0: 'unison', 1: 'm2', 2: 'M2', 3: 'm3', 4: 'M3', 5: 'P4',
@@ -1047,6 +1106,19 @@ function buildNoteInfoHtml(note, voiceName, voiceColor) {
     html += field('Position in cell', `${note.motif_pos + 1} / 3`);
     html += field('Structure', 'chromatic step → P4 leap');
     html += field('Note', 'Unpaired cell (no matching partner)');
+  }
+
+  // ── Section 2b: Stretto & Combination ──
+  if (note.stretto || (note.combination && note.combination.length > 1)) {
+    html += sep();
+    if (note.stretto) {
+      html += field('Stretto', `<strong style="color:${STRETTO_OUTLINE_COLOR}">\u2733 ${note.stretto_voices} voices overlapping</strong>`, 'highlight');
+      html += `<div class="info-field"><span class="info-field-key"></span><span class="info-field-val dim" style="font-size:10.5px;line-height:1.4;max-width:220px;white-space:normal">A new subject entry begins before the previous entry in another voice has finished. This creates a dense, intensified texture — a hallmark of Bach\'s contrapuntal mastery.</span></div>`;
+    }
+    if (note.combination && note.combination.length > 1) {
+      html += field('Combination', `<strong style="color:${COMBINATION_OUTLINE_COLOR}">\u2726 ${note.combination.join(' + ')}</strong>`, 'highlight');
+      html += `<div class="info-field"><span class="info-field-key"></span><span class="info-field-val dim" style="font-size:10.5px;line-height:1.4;max-width:220px;white-space:normal">Multiple distinct motif types sounding simultaneously across voices. In the triple fugues (C VIII, XI), Bach combines two or three subjects in invertible counterpoint.</span></div>`;
+    }
   }
 
   html += sep();
