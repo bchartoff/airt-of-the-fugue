@@ -26,6 +26,7 @@ const STRETTO_OUTLINE_COLOR = '#FFD700'; // gold outline for stretto notes
 const COMBINATION_OUTLINE_COLOR = '#FF1493'; // deep pink for multi-motif combination
 const AUGMENTATION_COLOR = '#00CED1'; // dark turquoise for augmented entries
 const DIMINUTION_COLOR = '#FF6347'; // tomato for diminished entries
+const MIRROR_COLOR = '#00FF88'; // bright green for mirror fugue pairs
 // Chromatic density heatmap: white (0%) → purple (100%)
 const CHROMATIC_LOW = '#ffffff';
 const CHROMATIC_HIGH = '#4A0072';
@@ -148,6 +149,7 @@ let lanes = [];
 
 // DOM refs
 let timeDisplay, tooltip, progressBarFill, progressBarContainer;
+let statsCanvas, statsCtx, statsLabels;
 let mutedVoices = new Set();
 
 // Info panel state
@@ -351,6 +353,8 @@ function drawFrame(t) {
     drawLane(lane, t, scrollX);
   });
 
+  drawStatsBar(t);
+
   // Keep info panel in sync even when paused
   buildInfoPanel();
 }
@@ -479,6 +483,13 @@ function drawLane(lane, t, scrollX) {
       ctx.save();
       ctx.fillStyle = DIMINUTION_COLOR;
       ctx.fillRect(r.x, r.y, r.w, 2);
+      ctx.restore();
+    }
+    // Mirror fugue: green left edge
+    if (n.mirror) {
+      ctx.save();
+      ctx.fillStyle = MIRROR_COLOR;
+      ctx.fillRect(r.x, r.y, 2, r.h);
       ctx.restore();
     }
   }
@@ -709,7 +720,24 @@ function drawChromaticStrip(lane, scrollX) {
   if (!data || !data.chromatic_density) return;
   const { ctx, w, h } = lane;
   const stripH = 3; // 3px thin strip at bottom
+  const dissonanceH = 3; // dissonance strip just above chromatic
   const secPerMeasure = 2.0;
+
+  // Dissonance strip (red-orange, above chromatic)
+  if (data.dissonance) {
+    for (const dd of data.dissonance) {
+      const x = (dd.measure - 1) * secPerMeasure * pxPerSec;
+      const mw = secPerMeasure * pxPerSec;
+      if (x + mw < scrollX || x > scrollX + w) continue;
+      const d = dd.dissonance;
+      if (d < 0.01) continue;
+      const color = lerpColor('#ffffff', '#FF4500', Math.min(1, d * 3));
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(x, h - stripH - dissonanceH, mw, dissonanceH);
+      ctx.globalAlpha = 1.0;
+    }
+  }
 
   for (const md of data.chromatic_density) {
     const x = (md.measure - 1) * secPerMeasure * pxPerSec;
@@ -723,6 +751,112 @@ function drawChromaticStrip(lane, scrollX) {
     ctx.globalAlpha = 0.6;
     ctx.fillRect(x, h - stripH, mw, stripH);
     ctx.globalAlpha = 1.0;
+  }
+}
+
+// ─────────────────────────────────────────────
+// STATS BAR (real-time metrics above lanes)
+// ─────────────────────────────────────────────
+function setupStatsCanvas() {
+  statsCanvas = document.getElementById('stats-canvas');
+  if (!statsCanvas) return;
+  statsCtx = statsCanvas.getContext('2d');
+  sizeStatsCanvas();
+}
+
+function sizeStatsCanvas() {
+  if (!statsCanvas) return;
+  const bar = statsCanvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  const w = bar.clientWidth;
+  const h = bar.clientHeight;
+  statsCanvas.width = w * dpr;
+  statsCanvas.height = h * dpr;
+  statsCanvas.style.width = w + 'px';
+  statsCanvas.style.height = h + 'px';
+  statsCtx.setTransform(1, 0, 0, 1, 0, 0);
+  statsCtx.scale(dpr, dpr);
+}
+
+function drawStatsBar(t) {
+  if (!statsCtx || !data) return;
+  const bar = statsCanvas.parentElement;
+  const w = bar.clientWidth;
+  const h = bar.clientHeight;
+
+  statsCtx.clearRect(0, 0, w, h);
+
+  // Figure out current measure from time
+  const secPerMeasure = (data.metadata.beats_per_measure || 4) * (data.metadata.tempo_us_per_beat / 1_000_000);
+  const currentMeasure = Math.max(1, Math.floor(t / secPerMeasure) + 1);
+  const totalMeasures = data.metadata.total_measures;
+
+  // Look up current measure metrics
+  const chromData = data.chromatic_density || [];
+  const compData = data.complexity || [];
+  const dissData = data.dissonance || [];
+
+  const chromMeasure = chromData.find(d => d.measure === currentMeasure);
+  const compMeasure = compData.find(d => d.measure === currentMeasure);
+  const dissMeasure = dissData.find(d => d.measure === currentMeasure);
+
+  const chromVal = chromMeasure ? chromMeasure.density : 0;
+  const compVal = compMeasure ? compMeasure.complexity : 0;
+  const dissVal = dissMeasure ? dissMeasure.dissonance : 0;
+
+  // Update labels
+  const elComp = document.getElementById('stat-complexity');
+  const elDiss = document.getElementById('stat-dissonance');
+  const elChrom = document.getElementById('stat-chromatic');
+  const elMeasure = document.getElementById('stat-measure');
+  if (elComp) elComp.innerHTML = `Complexity <b>${Math.round(compVal * 100)}%</b>`;
+  if (elDiss) elDiss.innerHTML = `Dissonance <b>${Math.round(dissVal * 100)}%</b>`;
+  if (elChrom) elChrom.innerHTML = `Chromatic <b>${Math.round(chromVal * 100)}%</b>`;
+  if (elMeasure) elMeasure.innerHTML = `m<b>${currentMeasure}</b>/<b>${totalMeasures}</b>`;
+
+  // Draw sparkline curves across the full width
+  const labelW = 280; // space reserved for labels on left
+  const chartX = labelW;
+  const chartW = w - labelW - 8;
+  const chartH = h - 4;
+  const chartY = 2;
+
+  if (chartW < 50) return;
+
+  // Draw each metric as a sparkline
+  const metrics = [
+    { data: compData, key: 'complexity', color: '#6666cc', label: 'C' },
+    { data: dissData, key: 'dissonance', color: '#FF4500', label: 'D' },
+    { data: chromData, key: 'density', color: '#4A0072', label: 'H' },
+  ];
+
+  for (const metric of metrics) {
+    if (!metric.data.length) continue;
+    statsCtx.beginPath();
+    statsCtx.strokeStyle = metric.color;
+    statsCtx.lineWidth = 1.2;
+    statsCtx.globalAlpha = 0.7;
+
+    for (let i = 0; i < metric.data.length; i++) {
+      const x = chartX + (i / (metric.data.length - 1 || 1)) * chartW;
+      const val = Math.min(1, (metric.data[i][metric.key] || 0) * 2); // amplify
+      const y = chartY + chartH * (1 - val);
+      if (i === 0) statsCtx.moveTo(x, y);
+      else statsCtx.lineTo(x, y);
+    }
+    statsCtx.stroke();
+    statsCtx.globalAlpha = 1.0;
+  }
+
+  // Draw playhead position on the sparkline
+  if (totalMeasures > 0) {
+    const playX = chartX + ((currentMeasure - 1) / (totalMeasures - 1 || 1)) * chartW;
+    statsCtx.beginPath();
+    statsCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+    statsCtx.lineWidth = 1;
+    statsCtx.moveTo(playX, chartY);
+    statsCtx.lineTo(playX, chartY + chartH);
+    statsCtx.stroke();
   }
 }
 
@@ -1004,6 +1138,11 @@ function showTooltip(clientX, clientY, note) {
   } else if (note.aug_dim === 'diminution') {
     augDimLine = `<span style="color:${DIMINUTION_COLOR}">\u25C1</span> DIMINUTION (${note.rhythm_ratio}× tempo)<br>`;
   }
+  // Mirror fugue
+  let mirrorLine = '';
+  if (note.mirror) {
+    mirrorLine = `<span style="color:${MIRROR_COLOR}">\u2194</span> MIRROR (subject + inversion paired)<br>`;
+  }
   // Chromatic density
   const chromDens = note.chromatic_density != null ? note.chromatic_density : 0;
   const chromLine = chromDens > 0.05
@@ -1021,6 +1160,7 @@ function showTooltip(clientX, clientY, note) {
     strettoLine +
     comboLine +
     augDimLine +
+    mirrorLine +
     chromLine +
     sectionLine +
     `Duration: ${note.duration.toFixed(3)}s`;
@@ -1191,13 +1331,36 @@ function buildNoteInfoHtml(note, voiceName, voiceColor) {
     }
   }
 
-  // ── Section 2d: Chromatic density ──
+  // ── Section 2d: Mirror fugue ──
+  if (note.mirror) {
+    html += sep();
+    html += field('Mirror fugue', `<strong style="color:${MIRROR_COLOR}">\u2194 Subject + Inversion paired</strong>`, 'highlight');
+    html += `<div class="info-field"><span class="info-field-key"></span><span class="info-field-val dim" style="font-size:10.5px;line-height:1.4;max-width:220px;white-space:normal">In a mirror fugue, one voice plays the subject while another simultaneously plays the exact inversion. The entire piece works both "right side up" and "upside down." C XII and XIII are mirror fugues.</span></div>`;
+  }
+
+  // ── Section 2e: Chromatic density ──
   const chromDens = note.chromatic_density != null ? note.chromatic_density : 0;
   if (chromDens > 0.01) {
     html += sep();
     const chromColor = lerpColor(CHROMATIC_LOW, CHROMATIC_HIGH, Math.min(1, chromDens * 2.5));
     html += field('Chromatic density', `<strong style="color:${chromColor}">${Math.round(chromDens * 100)}%</strong> of intervals in m${note.measure} are semitones`);
     html += `<div class="info-field"><span class="info-field-key"></span><div style="flex:1;max-width:220px">${barHtml(chromDens, chromColor)}</div></div>`;
+  }
+
+  // Complexity & dissonance for this measure
+  const compVal = note.complexity != null ? note.complexity : 0;
+  const dissVal = note.dissonance != null ? note.dissonance : 0;
+  if (compVal > 0 || dissVal > 0) {
+    html += sep();
+    if (compVal > 0) {
+      html += field('Complexity', `<strong style="color:#6666cc">${Math.round(compVal * 100)}%</strong> (m${note.measure})`);
+      html += `<div class="info-field"><span class="info-field-key"></span><div style="flex:1;max-width:220px">${barHtml(compVal, '#6666cc')}</div></div>`;
+    }
+    if (dissVal > 0) {
+      const dissColor = lerpColor('#ffffff', '#FF4500', Math.min(1, dissVal * 3));
+      html += field('Dissonance', `<strong style="color:${dissColor}">${Math.round(dissVal * 100)}%</strong> (m${note.measure})`);
+      html += `<div class="info-field"><span class="info-field-key"></span><div style="flex:1;max-width:220px">${barHtml(dissVal, dissColor)}</div></div>`;
+    }
   }
 
   html += sep();
@@ -1417,6 +1580,7 @@ fetch('pieces.json')
     tooltip = document.getElementById('tooltip');
     progressBarFill = document.getElementById('progress-bar-fill');
     progressBarContainer = document.getElementById('progress-bar-container');
+    setupStatsCanvas();
 
     // Progress bar click → seek
     progressBarContainer.addEventListener('click', e => {
@@ -1467,6 +1631,7 @@ fetch('pieces.json')
 
     window.addEventListener('resize', () => {
       sizeLanes();
+      sizeStatsCanvas();
       drawFrame(Tone.Transport.seconds);
     });
 

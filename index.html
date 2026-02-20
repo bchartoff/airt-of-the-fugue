@@ -8,6 +8,15 @@
 </head>
 <body>
 
+  <div id="stats-bar">
+    <canvas id="stats-canvas"></canvas>
+    <div id="stats-labels">
+      <span class="stat-label" id="stat-complexity" title="Composite complexity: voice count, density, motif saturation, interval diversity, rhythm variety">Complexity <b>—</b></span>
+      <span class="stat-label" id="stat-dissonance" title="Vertical dissonance: fraction of simultaneously-sounding intervals that are semitones, tritones, or 7ths">Dissonance <b>—</b></span>
+      <span class="stat-label" id="stat-chromatic" title="Chromatic density: fraction of melodic intervals that are semitones">Chromatic <b>—</b></span>
+      <span class="stat-label" id="stat-measure" title="Current measure">m<b>1</b></span>
+    </div>
+  </div>
   <div id="lanes"></div>
 
   <div id="progress-bar-container">

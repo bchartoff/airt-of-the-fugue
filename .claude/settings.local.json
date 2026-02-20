@@ -21,7 +21,25 @@
       "Bash(xargs kill:*)",
       "WebFetch(domain:www.jsbach.net)",
       "WebFetch(domain:www.mutopiaproject.org)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd diagonal stripe visualization and compose Contrapunctus XV\n\nVisualization: fuzzy/untagged notes now render with diagonal stripes\nwhere stripe density encodes similarity score \\(100% = solid, 0% = white\\).\nLane backgrounds also use stripes when a fuzzy note is active.\n\nContrapunctus XV: an original 4-voice fugue \\(80 measures, 710 notes\\)\non the Art of the Fugue subject. Features subject+inversion entering\nsimultaneously, stretto tightening from 2-bar to 1-beat spacing, and\nsubject in augmentation in the bass finale. 18 subject entries detected\nby the theme pipeline \\(32% of notes directly tagged as thematic\\).\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:library.oapen.org)",
+      "Bash(brew install:*)",
+      "Bash(pdftoppm:*)",
+      "Bash(git status:*)",
+      "WebFetch(domain:www.reddit.com)",
+      "WebFetch(domain:old.reddit.com)",
+      "WebFetch(domain:webcache.googleusercontent.com)",
+      "WebFetch(domain:www.brentanoquartet.com)",
+      "WebFetch(domain:www.kunstderfuge.com)",
+      "WebFetch(domain:halfofthealphabet.wordpress.com)",
+      "WebFetch(domain:www.bedwellmusic.co.uk)",
+      "WebFetch(domain:theconversation.com)",
+      "WebFetch(domain:hal.science)",
+      "WebFetch(domain:pipedreams.publicradio.org)"
     ]
   }
 }

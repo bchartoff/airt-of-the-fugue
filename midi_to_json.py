@@ -475,6 +475,218 @@ def compute_chromatic_density(all_notes, total_measures):
     return list(measure_data.values())
 
 
+def compute_complexity_curve(all_notes, total_measures, notes_by_voice):
+    """Compute per-measure complexity score.
+
+    Complexity is a composite metric combining:
+    - Voice count: how many voices are active (normalized 0-1)
+    - Note density: notes per beat (normalized 0-1)
+    - Motif saturation: fraction of notes tagged with a motif (0-1)
+    - Interval diversity: unique interval classes used (normalized 0-1)
+    - Rhythmic variety: unique note durations (normalized 0-1)
+
+    Returns list of dicts: [{measure, complexity, voice_count, note_density,
+                             motif_saturation, interval_diversity, rhythm_variety}]
+    Also tags each note with its measure's complexity.
+    """
+    from collections import defaultdict
+
+    # Group notes by measure
+    measure_notes = defaultdict(list)
+    for n in all_notes:
+        measure_notes[n['measure']].append(n)
+
+    max_voices = len(notes_by_voice)
+    results = []
+
+    for m in range(1, total_measures + 1):
+        mnotes = measure_notes.get(m, [])
+        if not mnotes:
+            results.append({
+                'measure': m, 'complexity': 0, 'voice_count': 0,
+                'note_density': 0, 'motif_saturation': 0,
+                'interval_diversity': 0, 'rhythm_variety': 0,
+            })
+            continue
+
+        # Voice count (normalized)
+        active_voices = len(set(n['voice'] for n in mnotes))
+        vc = active_voices / max_voices if max_voices > 0 else 0
+
+        # Note density (notes per beat, assuming 4 beats/measure)
+        nd = min(1.0, len(mnotes) / (max_voices * 8))  # cap at 8 notes/beat/voice
+
+        # Motif saturation
+        tagged = sum(1 for n in mnotes if n.get('motif', ''))
+        ms = tagged / len(mnotes)
+
+        # Interval diversity (unique interval classes 0-11)
+        intervals = set()
+        for v in notes_by_voice:
+            vnotes_m = sorted([n for n in mnotes if n['voice'] == v], key=lambda n: n['start'])
+            for i in range(len(vnotes_m) - 1):
+                ic = abs(vnotes_m[i + 1]['pitch'] - vnotes_m[i]['pitch']) % 12
+                intervals.add(ic)
+        id_score = min(1.0, len(intervals) / 7)  # 7 unique ICs is pretty complex
+
+        # Rhythmic variety (unique durations rounded to nearest 32nd note)
+        durs = set(round(n['duration'] * 16) / 16 for n in mnotes)
+        rv = min(1.0, len(durs) / 6)  # 6 different durations is complex
+
+        # Composite (weighted average)
+        complexity = round(
+            0.25 * vc +
+            0.20 * nd +
+            0.25 * ms +
+            0.15 * id_score +
+            0.15 * rv,
+            3
+        )
+
+        results.append({
+            'measure': m,
+            'complexity': complexity,
+            'voice_count': active_voices,
+            'note_density': round(nd, 3),
+            'motif_saturation': round(ms, 3),
+            'interval_diversity': round(id_score, 3),
+            'rhythm_variety': round(rv, 3),
+        })
+
+    # Tag each note
+    measure_map = {r['measure']: r for r in results}
+    for n in all_notes:
+        mc = measure_map.get(n['measure'])
+        n['complexity'] = mc['complexity'] if mc else 0
+
+    return results
+
+
+def compute_dissonance(all_notes, total_measures, notes_by_voice):
+    """Compute per-measure dissonance intensity.
+
+    Dissonance is measured by the presence of traditionally "dissonant"
+    interval classes between simultaneously sounding notes:
+    - IC 1 (minor 2nd / major 7th): strongly dissonant
+    - IC 2 (major 2nd / minor 7th): moderately dissonant
+    - IC 6 (tritone): strongly dissonant
+    - IC 11 (same as 1): strongly dissonant
+
+    We check all pairs of notes overlapping in time at each measure.
+
+    Returns list of dicts: [{measure, dissonance, dissonant_pairs, total_pairs}]
+    Also tags each note with its measure's dissonance.
+    """
+    from collections import defaultdict
+
+    # Group notes by measure
+    measure_notes = defaultdict(list)
+    for n in all_notes:
+        measure_notes[n['measure']].append(n)
+
+    # Dissonant interval classes and their weights
+    DISSONANCE_WEIGHTS = {1: 1.0, 2: 0.5, 6: 0.8, 10: 0.5, 11: 1.0}
+
+    results = []
+    for m in range(1, total_measures + 1):
+        mnotes = measure_notes.get(m, [])
+        if len(mnotes) < 2:
+            results.append({
+                'measure': m, 'dissonance': 0,
+                'dissonant_pairs': 0, 'total_pairs': 0,
+            })
+            continue
+
+        # Sample points within the measure to check vertical intervals
+        # Use note onsets as sample points
+        sample_times = sorted(set(n['start'] for n in mnotes))
+
+        total_diss = 0
+        total_pairs = 0
+
+        for t in sample_times:
+            # Notes sounding at time t
+            sounding = [n for n in mnotes
+                        if n['start'] <= t < n['start'] + n['duration']]
+            # Only count one note per voice
+            voice_pitches = {}
+            for n in sounding:
+                if n['voice'] not in voice_pitches:
+                    voice_pitches[n['voice']] = n['pitch']
+
+            pitches = list(voice_pitches.values())
+            for i in range(len(pitches)):
+                for j in range(i + 1, len(pitches)):
+                    ic = abs(pitches[i] - pitches[j]) % 12
+                    total_pairs += 1
+                    if ic in DISSONANCE_WEIGHTS:
+                        total_diss += DISSONANCE_WEIGHTS[ic]
+
+        dissonance = total_diss / total_pairs if total_pairs > 0 else 0
+        results.append({
+            'measure': m,
+            'dissonance': round(dissonance, 3),
+            'dissonant_pairs': round(total_diss, 1),
+            'total_pairs': total_pairs,
+        })
+
+    # Tag each note
+    measure_map = {r['measure']: r for r in results}
+    for n in all_notes:
+        md = measure_map.get(n['measure'])
+        n['dissonance'] = md['dissonance'] if md else 0
+
+    return results
+
+
+def detect_mirror_entries(notes_by_voice):
+    """Detect mirror-fugue voice pairs in C XII / XIII.
+
+    In a mirror fugue, one voice presents the subject while another voice
+    simultaneously presents its exact inversion. We detect when two voices
+    have simultaneous subject + subject_inv entries starting within 1 beat.
+
+    Tags notes with:
+      mirror: True if this note is part of a mirrored pair
+    """
+    # Collect all entries with start times
+    entries = []  # (voice_id, start_time, motif_type)
+    for voice_id, vnotes in notes_by_voice.items():
+        for n in vnotes:
+            if n.get('motif') in ('subject', 'subject_inv') and n.get('motif_pos') == 0:
+                entries.append((voice_id, n['start'], n['motif']))
+
+    # Initialize all notes
+    for vnotes in notes_by_voice.values():
+        for n in vnotes:
+            n['mirror'] = False
+
+    # Find pairs: subject + subject_inv starting within 0.5s of each other
+    mirror_times = []
+    for i, (va, ta, ma) in enumerate(entries):
+        if ma != 'subject':
+            continue
+        for j, (vb, tb, mb) in enumerate(entries):
+            if i == j or va == vb:
+                continue
+            if mb != 'subject_inv':
+                continue
+            if abs(ta - tb) < 0.5:
+                mirror_times.append((min(ta, tb), max(ta, tb) + 10))  # ~10s window
+
+    # Tag notes within mirror windows
+    if mirror_times:
+        for vnotes in notes_by_voice.values():
+            for n in vnotes:
+                if n.get('motif') in ('subject', 'subject_inv'):
+                    for (ms, me) in mirror_times:
+                        if ms <= n['start'] <= me:
+                            n['mirror'] = True
+                            break
+
+    return len(mirror_times)
+
+
 def tag_motifs(notes_by_voice):
     """Tag each note with motif info.
 
@@ -870,6 +1082,7 @@ def convert_piece(piece_num):
     tag_motifs(notes_by_voice)
     detect_stretto_and_combinations(notes_by_voice)
     detect_augmentation_diminution(notes_by_voice)
+    mirror_count = detect_mirror_entries(notes_by_voice)
 
     all_notes = []
     for notes in notes_by_voice.values():
@@ -880,6 +1093,8 @@ def convert_piece(piece_num):
     total_measures = max(n['measure'] for n in all_notes)
 
     chromatic_data = compute_chromatic_density(all_notes, total_measures)
+    complexity_data = compute_complexity_curve(all_notes, total_measures, notes_by_voice)
+    dissonance_data = compute_dissonance(all_notes, total_measures, notes_by_voice)
 
     output = {
         'metadata': {
@@ -899,6 +1114,8 @@ def convert_piece(piece_num):
         'voices': voice_meta,
         'notes': all_notes,
         'chromatic_density': chromatic_data,
+        'complexity': complexity_data,
+        'dissonance': dissonance_data,
     }
 
     with open(output_path, 'w') as f:
@@ -925,7 +1142,15 @@ def convert_piece(piece_num):
         print(f'  AUGMENTATION: {aug_count} notes in augmented entries')
     if dim_count:
         print(f'  DIMINUTION: {dim_count} notes in diminished entries')
+    if mirror_count:
+        print(f'  MIRROR: {mirror_count} mirror-fugue voice pairs detected')
+    avg_complexity = sum(d['complexity'] for d in complexity_data) / len(complexity_data) if complexity_data else 0
+    max_complexity = max((d['complexity'] for d in complexity_data), default=0)
+    avg_dissonance = sum(d['dissonance'] for d in dissonance_data) / len(dissonance_data) if dissonance_data else 0
+    max_dissonance = max((d['dissonance'] for d in dissonance_data), default=0)
     print(f'  CHROMATIC: avg={avg_chromatic:.1%}, max={max_chromatic:.1%}')
+    print(f'  COMPLEXITY: avg={avg_complexity:.3f}, max={max_complexity:.3f}')
+    print(f'  DISSONANCE: avg={avg_dissonance:.3f}, max={max_dissonance:.3f}')
     for v in voice_meta:
         print(f"  {v['name']}: {v['note_count']} notes, pitch {v['pitch_min']}–{v['pitch_max']}")
 
