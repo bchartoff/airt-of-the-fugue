@@ -343,6 +343,138 @@ def detect_stretto_and_combinations(notes_by_voice):
             n['combination'] = sorted(combo) if len(combo) > 1 else []
 
 
+def detect_augmentation_diminution(notes_by_voice):
+    """Detect subject entries played at augmented (2×) or diminished (½×) rhythm.
+
+    Augmentation: the subject's interval pattern is preserved but each note is
+    roughly 2× the normal duration. Diminution: each note is roughly ½×.
+
+    We compare the rhythm (durations) of each detected subject entry against the
+    typical rhythm of the first subject entry found. If the ratio is consistently
+    ~2.0 that's augmentation; ~0.5 is diminution.
+
+    Adds to each note:
+      aug_dim: 'augmentation', 'diminution', or '' (normal)
+      rhythm_ratio: float, average duration ratio vs reference entry
+    """
+    # First, collect all subject entries with their note durations
+    # Reference: the first complete subject entry we find
+    ref_durations = None
+    all_entries = []  # list of (voice_id, start_idx, end_idx, durations[])
+
+    for voice_id, vnotes in notes_by_voice.items():
+        i = 0
+        while i < len(vnotes):
+            n = vnotes[i]
+            if n['motif'] in ('subject', 'subject_inv') and n['motif_pos'] == 0:
+                entry_motif = n['motif']
+                entry_notes = [n]
+                j = i + 1
+                while (j < len(vnotes) and vnotes[j]['motif'] == entry_motif
+                       and vnotes[j]['motif_pos'] > 0):
+                    entry_notes.append(vnotes[j])
+                    j += 1
+                durs = [en['duration'] for en in entry_notes]
+                all_entries.append((voice_id, i, j, durs, entry_notes))
+                if ref_durations is None and len(durs) >= 7:
+                    ref_durations = durs
+                i = j
+            else:
+                i += 1
+
+    if ref_durations is None or len(all_entries) < 2:
+        # Not enough data — initialize fields and return
+        for vnotes in notes_by_voice.values():
+            for n in vnotes:
+                n['aug_dim'] = ''
+                n['rhythm_ratio'] = 1.0
+        return
+
+    ref_avg = sum(ref_durations) / len(ref_durations)
+
+    for voice_id, si, ei, durs, entry_notes in all_entries:
+        if len(durs) < 3:
+            for en in entry_notes:
+                en['aug_dim'] = ''
+                en['rhythm_ratio'] = 1.0
+            continue
+
+        entry_avg = sum(durs) / len(durs)
+        if ref_avg > 0:
+            ratio = entry_avg / ref_avg
+        else:
+            ratio = 1.0
+
+        label = ''
+        if ratio >= 1.7:
+            label = 'augmentation'
+        elif ratio <= 0.6:
+            label = 'diminution'
+
+        for en in entry_notes:
+            en['aug_dim'] = label
+            en['rhythm_ratio'] = round(ratio, 2)
+
+    # Initialize any notes not part of an entry
+    for vnotes in notes_by_voice.values():
+        for n in vnotes:
+            if 'aug_dim' not in n:
+                n['aug_dim'] = ''
+                n['rhythm_ratio'] = 1.0
+
+
+def compute_chromatic_density(all_notes, total_measures):
+    """Compute per-measure chromatic density.
+
+    Chromatic density = fraction of intervals in each measure that are
+    semitones (±1). Higher density indicates more chromatic writing,
+    which Bach uses to build tension.
+
+    Returns a list of dicts: [{measure, density, chromatic_count, interval_count}]
+    Also tags each note with its measure's chromatic_density.
+    """
+    from collections import defaultdict
+
+    # Group notes by voice and measure
+    voice_measure_notes = defaultdict(lambda: defaultdict(list))
+    for n in all_notes:
+        voice_measure_notes[n['voice']][n['measure']].append(n)
+
+    # Sort each voice-measure group by start time
+    for v in voice_measure_notes:
+        for m in voice_measure_notes[v]:
+            voice_measure_notes[v][m].sort(key=lambda n: n['start'])
+
+    # Count chromatic intervals per measure
+    measure_data = {}
+    for m in range(1, total_measures + 1):
+        chromatic = 0
+        total_intervals = 0
+        for v in voice_measure_notes:
+            notes = voice_measure_notes[v].get(m, [])
+            for i in range(len(notes) - 1):
+                interval = abs(notes[i + 1]['pitch'] - notes[i]['pitch'])
+                if interval > 0:  # skip repeated notes
+                    total_intervals += 1
+                    if interval == 1:
+                        chromatic += 1
+
+        density = chromatic / total_intervals if total_intervals > 0 else 0.0
+        measure_data[m] = {
+            'measure': m,
+            'density': round(density, 3),
+            'chromatic_count': chromatic,
+            'interval_count': total_intervals,
+        }
+
+    # Tag each note with its measure's density
+    for n in all_notes:
+        md = measure_data.get(n['measure'])
+        n['chromatic_density'] = md['density'] if md else 0.0
+
+    return list(measure_data.values())
+
+
 def tag_motifs(notes_by_voice):
     """Tag each note with motif info.
 
@@ -737,6 +869,7 @@ def convert_piece(piece_num):
 
     tag_motifs(notes_by_voice)
     detect_stretto_and_combinations(notes_by_voice)
+    detect_augmentation_diminution(notes_by_voice)
 
     all_notes = []
     for notes in notes_by_voice.values():
@@ -745,6 +878,8 @@ def convert_piece(piece_num):
 
     total_duration = max(n['start'] + n['duration'] for n in all_notes)
     total_measures = max(n['measure'] for n in all_notes)
+
+    chromatic_data = compute_chromatic_density(all_notes, total_measures)
 
     output = {
         'metadata': {
@@ -763,6 +898,7 @@ def convert_piece(piece_num):
         },
         'voices': voice_meta,
         'notes': all_notes,
+        'chromatic_density': chromatic_data,
     }
 
     with open(output_path, 'w') as f:
@@ -773,6 +909,10 @@ def convert_piece(piece_num):
     stretto_count = sum(1 for n in all_notes if n.get('stretto'))
     combo_count = sum(1 for n in all_notes if n.get('combination'))
     max_stretto = max((n.get('stretto_voices', 0) for n in all_notes), default=0)
+    aug_count = sum(1 for n in all_notes if n.get('aug_dim') == 'augmentation')
+    dim_count = sum(1 for n in all_notes if n.get('aug_dim') == 'diminution')
+    avg_chromatic = sum(d['density'] for d in chromatic_data) / len(chromatic_data) if chromatic_data else 0
+    max_chromatic = max((d['density'] for d in chromatic_data), default=0)
     print(f"[{piece['title']}] Wrote {len(all_notes)} notes to {output_path}")
     print(f'  Duration: {total_duration:.1f}s, Measures: {total_measures}')
     for m, c in sorted(motif_counts.items()):
@@ -781,6 +921,11 @@ def convert_piece(piece_num):
         print(f'  STRETTO: {stretto_count} notes in stretto (max {max_stretto} voices)')
     if combo_count:
         print(f'  COMBINATIONS: {combo_count} notes in multi-motif combinations')
+    if aug_count:
+        print(f'  AUGMENTATION: {aug_count} notes in augmented entries')
+    if dim_count:
+        print(f'  DIMINUTION: {dim_count} notes in diminished entries')
+    print(f'  CHROMATIC: avg={avg_chromatic:.1%}, max={max_chromatic:.1%}')
     for v in voice_meta:
         print(f"  {v['name']}: {v['note_count']} notes, pitch {v['pitch_min']}–{v['pitch_max']}")
 

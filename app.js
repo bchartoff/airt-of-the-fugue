@@ -24,6 +24,11 @@ const SUBJECT_COLORS = [
 const FUZZY_COLOR = '#999999'; // grey for untagged / fuzzy-only notes
 const STRETTO_OUTLINE_COLOR = '#FFD700'; // gold outline for stretto notes
 const COMBINATION_OUTLINE_COLOR = '#FF1493'; // deep pink for multi-motif combination
+const AUGMENTATION_COLOR = '#00CED1'; // dark turquoise for augmented entries
+const DIMINUTION_COLOR = '#FF6347'; // tomato for diminished entries
+// Chromatic density heatmap: white (0%) → purple (100%)
+const CHROMATIC_LOW = '#ffffff';
+const CHROMATIC_HIGH = '#4A0072';
 
 // BACH motif colors (Bb-A-C-B♮ = blue/teal family, distinct from warm subject palette)
 const BACH_COLORS = ['#0077B6', '#00B4D8', '#90E0EF', '#0077B6']; // 4-note motif
@@ -462,7 +467,24 @@ function drawLane(lane, t, scrollX) {
       ctx.fill();
       ctx.restore();
     }
+    // Augmentation: turquoise bottom bar
+    if (n.aug_dim === 'augmentation') {
+      ctx.save();
+      ctx.fillStyle = AUGMENTATION_COLOR;
+      ctx.fillRect(r.x, r.y + r.h - 2, r.w, 2);
+      ctx.restore();
+    }
+    // Diminution: tomato top bar
+    if (n.aug_dim === 'diminution') {
+      ctx.save();
+      ctx.fillStyle = DIMINUTION_COLOR;
+      ctx.fillRect(r.x, r.y, r.w, 2);
+      ctx.restore();
+    }
   }
+
+  // ── Chromatic density heat strip (thin bar at very bottom of lane) ──
+  drawChromaticStrip(lane, scrollX);
 
   // ── Measure number labels ──
   drawMeasureLabels(lane, scrollX);
@@ -493,11 +515,12 @@ function getNoteMotifLabel(note) {
   const sim = note.similarity != null ? note.similarity : 0;
   const pct = Math.round(sim * 100);
   const strettoSuffix = note.stretto ? '  ✳' : '';
+  const augDimSuffix = note.aug_dim === 'augmentation' ? '  ▷' : (note.aug_dim === 'diminution' ? '  ◁' : '');
 
   if (m === 'subject') {
-    return { prefix: '★', label: `subject  ${pos + 1}/8${strettoSuffix}` };
+    return { prefix: '★', label: `subject  ${pos + 1}/8${strettoSuffix}${augDimSuffix}` };
   } else if (m === 'subject_inv') {
-    return { prefix: '☆', label: `inv. subject  ${pos + 1}/8${strettoSuffix}` };
+    return { prefix: '☆', label: `inv. subject  ${pos + 1}/8${strettoSuffix}${augDimSuffix}` };
   } else if (m === 'tail') {
     return { prefix: '~', label: `tail  ${pos - 2}/5` };
   } else if (m === 'tail_inv') {
@@ -679,6 +702,27 @@ function drawSubjectMarkers(lane, scrollX) {
     }
     ctx.fill();
     ctx.restore();
+  }
+}
+
+function drawChromaticStrip(lane, scrollX) {
+  if (!data || !data.chromatic_density) return;
+  const { ctx, w, h } = lane;
+  const stripH = 3; // 3px thin strip at bottom
+  const secPerMeasure = 2.0;
+
+  for (const md of data.chromatic_density) {
+    const x = (md.measure - 1) * secPerMeasure * pxPerSec;
+    const mw = secPerMeasure * pxPerSec;
+    if (x + mw < scrollX || x > scrollX + w) continue;
+
+    const d = md.density;
+    if (d < 0.01) continue; // skip empty measures
+    const color = lerpColor(CHROMATIC_LOW, CHROMATIC_HIGH, Math.min(1, d * 2.5)); // amplify for visibility
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(x, h - stripH, mw, stripH);
+    ctx.globalAlpha = 1.0;
   }
 }
 
@@ -953,6 +997,18 @@ function showTooltip(clientX, clientY, note) {
   if (note.combination && note.combination.length > 1) {
     comboLine = `<span style="color:${COMBINATION_OUTLINE_COLOR}">\u2726</span> Combined: ${note.combination.join(' + ')}<br>`;
   }
+  // Augmentation / diminution info
+  let augDimLine = '';
+  if (note.aug_dim === 'augmentation') {
+    augDimLine = `<span style="color:${AUGMENTATION_COLOR}">\u25B7</span> AUGMENTATION (${note.rhythm_ratio}× tempo)<br>`;
+  } else if (note.aug_dim === 'diminution') {
+    augDimLine = `<span style="color:${DIMINUTION_COLOR}">\u25C1</span> DIMINUTION (${note.rhythm_ratio}× tempo)<br>`;
+  }
+  // Chromatic density
+  const chromDens = note.chromatic_density != null ? note.chromatic_density : 0;
+  const chromLine = chromDens > 0.05
+    ? `<span style="color:${CHROMATIC_HIGH}">\u266F</span> Chromatic density: ${Math.round(chromDens * 100)}%<br>`
+    : '';
   const sec = getSectionAt(note.start);
   const sectionLine = sec
     ? `<span style="color:${sec.color}">\u25A0</span> ${sec.label}<br>`
@@ -964,6 +1020,8 @@ function showTooltip(clientX, clientY, note) {
     motifLine +
     strettoLine +
     comboLine +
+    augDimLine +
+    chromLine +
     sectionLine +
     `Duration: ${note.duration.toFixed(3)}s`;
   tooltip.style.left = (clientX + 12) + 'px';
@@ -1119,6 +1177,27 @@ function buildNoteInfoHtml(note, voiceName, voiceColor) {
       html += field('Combination', `<strong style="color:${COMBINATION_OUTLINE_COLOR}">\u2726 ${note.combination.join(' + ')}</strong>`, 'highlight');
       html += `<div class="info-field"><span class="info-field-key"></span><span class="info-field-val dim" style="font-size:10.5px;line-height:1.4;max-width:220px;white-space:normal">Multiple distinct motif types sounding simultaneously across voices. In the triple fugues (C VIII, XI), Bach combines two or three subjects in invertible counterpoint.</span></div>`;
     }
+  }
+
+  // ── Section 2c: Augmentation / Diminution ──
+  if (note.aug_dim) {
+    html += sep();
+    if (note.aug_dim === 'augmentation') {
+      html += field('Rhythm', `<strong style="color:${AUGMENTATION_COLOR}">\u25B7 Augmentation (${note.rhythm_ratio}\u00D7)</strong>`, 'highlight');
+      html += `<div class="info-field"><span class="info-field-key"></span><span class="info-field-val dim" style="font-size:10.5px;line-height:1.4;max-width:220px;white-space:normal">Subject played at roughly double the normal note durations. The intervals are preserved but the rhythm is stretched. Used in C VI and VII for stretto per augmentationem.</span></div>`;
+    } else {
+      html += field('Rhythm', `<strong style="color:${DIMINUTION_COLOR}">\u25C1 Diminution (${note.rhythm_ratio}\u00D7)</strong>`, 'highlight');
+      html += `<div class="info-field"><span class="info-field-key"></span><span class="info-field-val dim" style="font-size:10.5px;line-height:1.4;max-width:220px;white-space:normal">Subject played at roughly half the normal note durations. The intervals are preserved but the rhythm is compressed. Creates urgency and intensity.</span></div>`;
+    }
+  }
+
+  // ── Section 2d: Chromatic density ──
+  const chromDens = note.chromatic_density != null ? note.chromatic_density : 0;
+  if (chromDens > 0.01) {
+    html += sep();
+    const chromColor = lerpColor(CHROMATIC_LOW, CHROMATIC_HIGH, Math.min(1, chromDens * 2.5));
+    html += field('Chromatic density', `<strong style="color:${chromColor}">${Math.round(chromDens * 100)}%</strong> of intervals in m${note.measure} are semitones`);
+    html += `<div class="info-field"><span class="info-field-key"></span><div style="flex:1;max-width:220px">${barHtml(chromDens, chromColor)}</div></div>`;
   }
 
   html += sep();
